@@ -1,0 +1,19 @@
+# 教练素材仅限本地使用：视频、帧图、字幕转写和清洗结果都不进仓库
+*.mp4
+*.mov
+*.MOV
+*.m4v
+*.srt
+*.jpg
+*.jpeg
+*.png
+proto/work/
+proto/work_old/
+proto/coach_asr.*
+proto/coach_peaks.json
+proto/scenes.txt
+proto/sel.json
+
+__pycache__/
+.DS_Store
+.env
