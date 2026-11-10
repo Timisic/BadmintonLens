@@ -7,6 +7,7 @@
 *.jpg
 *.jpeg
 *.png
+proto/store/
 proto/work/
 proto/work_old/
 proto/coach_asr.*

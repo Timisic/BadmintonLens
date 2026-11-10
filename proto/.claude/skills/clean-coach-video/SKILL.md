@@ -1,66 +1,36 @@
 ---
 name: clean-coach-video
-description: Clean a badminton coach video into the swing library (segments, swings, phases, camera side) with clean.py, then review the model's labels as the vision reviewer. Use when asked to clean, ingest, re-run, or review a coach video, or to fix swing labels in work/<video>/.
+description: Clean a badminton video into the swing library with clean.py, doing the vision labeling yourself through subagents. Covers coach videos (segments, swings, phases, camera side) and the user's own clips. Use when asked to clean, ingest, process, re-run, or relabel a video, or to fix swing labels in store/<video_id>/.
 ---
 
-# Clean a coach video
+# Clean a video into the swing library
 
-Run from the `proto/` directory. The video path is `<video>` below. Every stage caches in `work/<stem>/` and is safe to re-run.
+Run from `proto/`. `<video>` is the video path. Each stage caches in `store/<video_id>/` and is safe to re-run. `prep` prints the id. The code calls no model. You are the vision model, so every label comes from you or a subagent reading a sheet image.
 
-## 1. Model pass (Qwen, cheap)
+Field names and values are English and come from the vocab tables at the top of `db.py`. Frame numbers in a label are the yellow `#` numbers on the sheet. `ingest` turns them into seconds.
 
-The model reads `DASHSCOPE_API_KEY` from the environment. If it is unset, ask the user to export it. Never write a key into a file or repeat it in a reply.
+## Coach video
 
-```bash
-python3 clean.py prep "<video>"
-python3 clean.py classify "<video>"
-python3 clean.py swings "<video>"
-python3 clean.py phases "<video>"
-python3 clean.py fine "<video>" --model
-python3 clean.py table "<video>"
-```
+1. `python3 clean.py prep "<video>"`. Read `classify_task.md`. For each `sheets/sheet_XX.jpg` with its `.txt`, label every tile. Write all tiles to `tile_labels.json`.
+2. `python3 clean.py swings "<video>"`. Glance at the printed segment list. Read `phase_task.md`. For each sheet listed in `swings.json`, write its answer to `phase_labels.json` under the swing id.
+3. `python3 clean.py fine "<video>"`. Read `fine_task.md`. For each `fine/<swing id>.jpg`, write its answer to `fine_labels.json`. These override `racket_low` and `hit` from step 2.
+4. `python3 clean.py ingest "<video>"`. It validates every label and names each one it rejects. Fix those entries and run it again.
 
-After `swings`, glance at the printed segment list. Re-running `swings` gives segments new ids, so re-run `phases`, `fine` and `table` after it.
+To change a segment's kind after seeing its swings, write `segment_kinds.json` as `{"<segment id>": "slow_demo"}` and re-run `ingest`. Changing `tile_labels.json` instead means re-running `swings` and relabeling.
 
-`phases` makes two calls per swing. The main call asks for racket height per sheet row and the phase frames. Code then sets `usable` false when the racket never comes down from above, and drops `置信度` to 低 when the phase order is wrong. A separate short call asks only `脸` and `拍位`, because folded into the main call those answers were wrong half the time.
+## The user's own clip
 
-## 2. Review pass (you)
+`python3 clean.py prep "<video>" --user`, then steps 2 to 4. There is no classify step. Most candidates in a user clip are walking or setup. Mark those `{"usable": false}` and nothing else.
 
-`table` writes `work/<stem>/claude_review_task.md` and `work/<stem>/review_sides.jpg`. The task has two lists.
+## Labeling
 
-**Segment types.** Each demo segment with its transcript and sheets. Check that `全速正确示范` really is full speed. Slow-motion breakdowns become `慢速分解` and match footage becomes `比赛实战`.
+- With more than 10 sheets, split them across subagents. Each writes `<name>_<n>.json`. Merge the parts into the final file yourself, then delete the parts.
+- `usable` is false when the racket never comes down from above the head to the front, as when the player only raises the racket, walks, or gestures. A usable swing needs `backswing`, `racket_low` and `hit`.
+- `face_visible` and `racket_side` decide which coach swing a user swing is compared with. Judge both from the first row only. `racket_side` is the viewer's left or right, not the player's.
+- `ingest` sets `usable` to false when `racket_height` does not end lower than it starts.
 
-**Swings.** Every usable or low-confidence swing with the model's labels. Read `review_sides.jpg` first. It shows the backswing of every listed swing with its `脸` and `拍位`, so one look fixes most side errors. Then Read `swings/<id>.jpg` for each id, and `fine/<id>.jpg` only when the hit frame looks wrong.
+## After
 
-- `脸`: 看得到 when the coach's eyes and nose are visible, 看不到 when only the back of the head is.
-- `拍位`: 画面左 or 画面右, the racket's side of the body from the viewer's left and right, not the coach's.
-- `angle`: camera position relative to the coach. One of 正面 / 背后 / 斜后 / 侧面 / 斜前.
-- `usable` false: the racket never comes down from above the head to the front, as when the coach only raises the racket, walks, or gestures.
-- Frame fields `引拍侧身`, `拍头最低点`, `击球点`: use the yellow `#` numbers on the tiles. Keep them in that order.
-
-Write `work/<stem>/claude_labels.json`:
-
-```json
-{"seg092_sw0": {"usable": true, "脸": "看不到", "拍位": "画面右"},
- "seg089": {"type": "慢速分解"}}
-```
-
-`usable` is required on every swing entry and `type` on every segment entry, even when unchanged, because a model re-run can flip them. Other fields only when you change them. Then re-run `table`. It merges your fields over the model's, marks them `复核: "claude"`, warns about ids that match nothing, and drops reviewed ids from the task.
-
-With more than 10 swings, split the ids across subagents. Each writes `claude_labels_<n>.json`. Merge them into `claude_labels.json` yourself, then delete the parts.
-
-Change no file other than `claude_labels.json`.
-
-## 3. Output
-
-`work/<stem>/segments.json` is the library record the frontend reads. Keep its shape. Add fields only, and rename or remove none.
-
-```
-{video, fps, segments: [{id, type, angle, t0, t1, text, clip, 复核?, swings: [
-  {id, peak_frame, t, sheet, box, phases: {usable, angle, 脸, 拍位, 引拍侧身, 拍头最低点, 击球点, 随挥收拍,
-                                           置信度, 备注, 拍头高度, 精标?, 复核?}}]}]}
-```
-
-Label layers merge in this order, later wins: `phase_labels.json` (model), `fine_labels.json` (fine hit frames), `claude_labels.json` (you). `segments_confirmed.json`, saved by `python3 clean.py review "<video>"`, holds human edits. No code merges it yet.
-
-User-side comparison picks coach swings from every `work/*/segments.json`. It requires the same `脸` and `拍位`, prefers the same `angle`, then fine-labeled, confident, and high-fps swings. Run `python3 compare_angle.py` after the library changes.
+- `python3 compare.py` rebuilds the comparison images in `store/compare/`.
+- `python3 db.py` prints the library as JSON.
+- `LENS_REMOTE=ubuntu-8-179:badminton-lens/store python3 store.py push` copies the store to the intranet server. Use SSH key auth only. Never type or store a password.
