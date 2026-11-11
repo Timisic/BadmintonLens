@@ -12,12 +12,15 @@ proto/
   compare.py   生成对比图
   pose.py      GPU 姿态关键点（在服务器上跑）
   asr.py       没有 SRT 时的语音转写
+  api.py       本机 HTTP API，前端读写素材库都走它
   test_db.py   自检
+  test_api.py  API 自检
   store/       派生文件（不进仓库）
     lens.db                 素材库
     coach/<视频名>/         教练视频：缩略图、挥拍图、预览片段、标签
     user/<视频名>/          你的视频，同上
     compare/<视频名>_<时间>.jpg   对比图
+web/           本地网页前端，基于 shadcn-admin（MIT，见 web/LICENSE）
 ```
 
 视频目录里的文件按它在视频里的时间命名，例如 `swings/01m04.167s.jpg`。
@@ -44,6 +47,23 @@ rsync -a pose.py db.py store.py ubuntu-8-179:badminton-lens/
 ssh ubuntu-8-179 'cd badminton-lens && .venv/bin/python pose.py all videos --devices 0,1,2'
 LENS_REMOTE=ubuntu-8-179:badminton-lens/store python3 store.py pull
 ```
+
+## 前端
+
+开两个终端：
+
+```bash
+cd proto && python3 api.py         # API，只监听 127.0.0.1:8000
+cd web && pnpm install && pnpm dev # 网页，http://localhost:5173
+```
+
+Vite 把 `/api` 和 `/store` 代理到 API，所以浏览器只访问 5173 端口。三个页面：
+
+- **素材库**：视频表格，点进去看片段和挥拍。
+- **挥拍审核**：逐帧看源视频，改可用、机位和阶段时间，保存到 `human` 层；撤销人工标签就回到下面的层。
+- **对比**：选你的一拍，教练在上、你在下，按阶段对齐，每行可以单独前后挪一帧。
+
+依赖：Node 20.19+、pnpm、`pip install fastapi uvicorn httpx`（httpx 只有自检用）。自检：`cd proto && python3 test_db.py && python3 test_api.py`，`cd web && pnpm build && pnpm lint`。
 
 ## 约定
 
