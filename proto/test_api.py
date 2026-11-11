@@ -63,4 +63,6 @@ assert not_ready.status_code == 400 and db.PHASE["hit"] in not_ready.json()["det
 http.put("/api/swings/u1/label", json={**ok, "racket_side": "left"})
 m = http.get("/api/swings/u1/match").json()
 assert m["coach"] is None and m["note"]
+assert http.get("/api/nope").status_code == 404
+assert "sqlite3" not in http.get("/..%2f..%2fproto/db.py").text  # the frontend route never serves a file outside dist
 print("ok")

@@ -1,8 +1,9 @@
 """Local HTTP API over the library, for the web frontend in ../web. Binds 127.0.0.1 only: coach material stays on
 this machine.
 
-  python3 api.py     http://127.0.0.1:8000
+  python3 api.py     http://127.0.0.1:8000   also serves the built frontend, once `pnpm build` has run in ../web
 """
+from pathlib import Path
 from contextlib import closing
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
@@ -63,6 +64,20 @@ def match(swing_id: str):
     side = lambda s: {"swing": s, "times": compare.times(s["label"]), "box": compare.view(s)}
     return {"cols": compare.COLS, "step": compare.N + 1, "note": note, "user": side(user),
             "coach": coach and side(coach)}
+
+DIST = Path(__file__).resolve().parent.parent / "web/dist"
+
+@app.get("/{path:path}")
+def page(path: str):
+    """The built frontend. Its routes live in the browser, so any path that is not a file gets the app shell."""
+    if path.startswith(("api/", "store/")):
+        raise HTTPException(404)
+    f = (DIST / path).resolve()
+    if path and f.is_file() and f.is_relative_to(DIST):
+        return FileResponse(f)
+    if not (DIST / "index.html").is_file():
+        raise HTTPException(404, "前端还没构建：cd web && pnpm build")
+    return FileResponse(DIST / "index.html")
 
 if __name__ == "__main__":
     import uvicorn

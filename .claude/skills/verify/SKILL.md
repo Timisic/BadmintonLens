@@ -37,6 +37,10 @@ Get real ids from `curl -s localhost:8765/api/library`. In zsh, unquoted variabl
 
 Stable handles: roles and Chinese names. `getByRole('button', { name: '保存' })`, `'设为当前帧'`, `'上一帧'`, `'下一帧'`, `'跳到击球点'`, `getByRole('radio', { name: '否' })`. Keys on the review page: `ArrowLeft`/`ArrowRight` frame, `Space` play, `1`–`4` capture a phase, `ArrowUp`/`ArrowDown` previous and next swing, `Meta+s` save.
 
+`node .claude/skills/verify/time.mjs <path> [runs]` prints the milliseconds from navigation until every `<video>` on the page shows its frame. The compare page with 18 videos takes about 1.5 s on this machine; treat a jump well past that as a regression.
+
+The API also serves `web/dist` on its own port, so `http://127.0.0.1:8765/` is the built app after `pnpm build`.
+
 Per-feature journeys are in [features/](features/README.md).
 
 ## Evidence

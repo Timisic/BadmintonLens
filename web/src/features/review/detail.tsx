@@ -67,7 +67,6 @@ function Workspace({
   const save = useSaveLabel()
   const revert = useDeleteLabel()
   const player = useRef<FramePlayerHandle>(null)
-  const [time, setTime] = useState(swing.t0)
   const effective = (): LabelDraft => {
     const { source: _, ...rest } = swing.label
     return rest
@@ -80,9 +79,12 @@ function Workspace({
     setSource(swing.label.source)
     setDraft(effective())
   }
-  const set = (patch: LabelDraft) => setDraft({ ...draft, ...patch })
-  const capture = (key: (typeof lib.phases)[number]) =>
-    set({ [key]: Math.round(time * 1000) / 1000 })
+  const set = (patch: LabelDraft) => setDraft((d) => ({ ...d, ...patch }))
+  // asks the player, not our last render: a step may still be landing
+  const capture = async (key: (typeof lib.phases)[number]) => {
+    const t = await player.current?.shown()
+    if (t !== undefined) set({ [key]: Math.round(t * 1000) / 1000 })
+  }
   const go = (to?: Entry) =>
     to &&
     navigate({
@@ -187,7 +189,6 @@ function Workspace({
                     ? []
                     : [{ t: draft[key], name: lib.vocab.phase[key] }]
                 )}
-                onFrame={setTime}
               />
             </TabsContent>
           ))}

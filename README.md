@@ -55,6 +55,7 @@ LENS_REMOTE=ubuntu-8-179:badminton-lens/store python3 store.py pull
 ```bash
 cd proto && python3 api.py         # API，只监听 127.0.0.1:8000
 cd web && pnpm install && pnpm dev # 网页，http://localhost:5173
+# 或者只起一个进程：cd web && pnpm build，之后 python3 api.py 同时提供网页，http://127.0.0.1:8000
 ```
 
 Vite 把 `/api` 和 `/store` 代理到 API，所以浏览器只访问 5173 端口。三个页面：

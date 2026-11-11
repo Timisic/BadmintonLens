@@ -1,7 +1,8 @@
 import { useEffect, useImperativeHandle, useRef, useState } from 'react'
-import { Pause, Play, StepBack, StepForward } from 'lucide-react'
+import { Loader2, Pause, Play, StepBack, StepForward } from 'lucide-react'
 import { type Box, clock, sourceUrl } from '@/lib/library'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import {
   Tooltip,
@@ -14,6 +15,8 @@ export type FramePlayerHandle = {
   seek: (t: number) => void
   step: (frames: number) => void
   toggle: () => void
+  /** Time of the frame on screen, once any seek under way has landed. */
+  shown: () => Promise<number>
 }
 
 type FramePlayerProps = {
@@ -60,33 +63,85 @@ export function FramePlayer({
   const scale = Math.min(1 / (x1 - x0), aspect / (ratio * (y1 - y0)))
   const tall = (scale * ratio) / aspect
 
+  // start of the frame on screen, the time we are heading for, and the step
+  // that sent us there
+  const shown = useRef(start)
+  const want = useRef(start)
+  const stepping = useRef({ from: start, by: 0, tries: 0 })
+  const waiting = useRef<((t: number) => void)[]>([])
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [rate, setRate] = useState(1)
+
+  // Half a frame past the time asked for: a seek to the exact start of a frame
+  // can land on the one before it.
+  const go = (t: number) => {
+    want.current = t
+    video.current!.currentTime = Math.max(0, t + 0.5 / fps)
+  }
   const seek = (t: number) => {
     video.current!.pause()
-    video.current!.currentTime = t
+    stepping.current.by = 0
+    go(t)
   }
-  const step = (frames: number) =>
-    seek(video.current!.currentTime + frames / fps)
+  const step = (frames: number) => {
+    const v = video.current!
+    v.pause()
+    // from where we are heading when a seek is still under way, so held keys add up
+    const from = v.seeking ? want.current : shown.current
+    stepping.current = { from: shown.current, by: frames, tries: 0 }
+    go(from + frames / fps)
+  }
   const toggle = () =>
     video.current!.paused ? video.current!.play() : video.current!.pause()
-  useImperativeHandle(ref, () => ({ seek, step, toggle }))
+  useImperativeHandle(ref, () => ({
+    seek,
+    step,
+    toggle,
+    shown: () =>
+      video.current!.seeking
+        ? new Promise((done) => {
+            waiting.current.push(done)
+            // a seek that lands on the frame already shown paints nothing new
+            setTimeout(() => done(shown.current), 1000)
+          })
+        : Promise.resolve(shown.current),
+  }))
 
   // Covers a new start in the same video. A new video is positioned once its
   // metadata loads, below.
   useEffect(() => {
-    video.current!.currentTime = start
+    go(start)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [start])
+
+  useEffect(() => {
+    video.current!.playbackRate = rate
+  }, [rate])
 
   // Phone video is variable frame rate, so currentTime is only where we asked
   // to be. mediaTime is the timestamp of the frame actually on screen.
+  const [from, to] = range ?? [0, Infinity]
   useEffect(() => {
     const v = video.current!
     let id = v.requestVideoFrameCallback(function tick(_now, frame) {
-      setTime(frame.mediaTime)
-      onFrame?.(frame.mediaTime)
       id = v.requestVideoFrameCallback(tick)
+      const t = frame.mediaTime
+      const s = stepping.current
+      // A frame longer than 1/fps swallows a step. Push on until the picture changes.
+      if (s.by && t === s.from && !v.seeking && s.tries++ < 4)
+        return go(want.current + Math.sign(s.by) / fps)
+      s.by = 0
+      // play the swing on a loop
+      if (!v.paused && t >= to) v.currentTime = from
+      shown.current = t
+      setState('ready')
+      setTime(t)
+      onFrame?.(t)
+      waiting.current.splice(0).forEach((done) => done(t))
     })
     return () => v.cancelVideoFrameCallback(id)
-  }, [onFrame])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onFrame, from, to])
 
   const stepButton = (frames: number, className?: string) => (
     <IconButton
@@ -121,12 +176,23 @@ export function FramePlayer({
           }}
           onLoadedMetadata={({ currentTarget: v }) => {
             setAspect(v.videoWidth / v.videoHeight)
-            v.currentTime = start
+            go(start)
           }}
+          onError={() => setState('error')}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
         />
-        {still && (
+        {state === 'loading' && (
+          <Loader2 className='absolute inset-0 m-auto size-5 animate-spin text-white/70' />
+        )}
+        {state === 'error' && (
+          <p className='absolute inset-0 flex items-center justify-center bg-black p-3 text-center text-sm text-white'>
+            {still
+              ? '打不开'
+              : '视频打不开。源文件可能被移走了，或者浏览器不支持它的编码。'}
+          </p>
+        )}
+        {still && state === 'ready' && (
           <div className='absolute inset-x-1.5 bottom-1.5 flex justify-between opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100'>
             {stepButton(-1)}
             {stepButton(1)}
@@ -179,6 +245,16 @@ export function FramePlayer({
             {playing ? <Pause /> : <Play />}
           </IconButton>
           {stepButton(1)}
+          <Button
+            type='button'
+            variant='ghost'
+            size='sm'
+            className='h-7 w-12 font-mono tabular-nums'
+            aria-label='播放速度'
+            onClick={() => setRate(rate === 1 ? 0.5 : rate === 0.5 ? 0.25 : 1)}
+          >
+            {rate}×
+          </Button>
           <span className='min-w-16 font-mono text-sm tabular-nums'>
             {format(time)}
           </span>
