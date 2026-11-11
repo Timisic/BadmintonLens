@@ -1,56 +1,58 @@
 # BadmintonLens
 
-本地运行的羽毛球动作对照工具。先把教练视频清洗成按机位、按阶段标注的挥拍库，再把你自己拍的挥拍和同机位的教练示范逐阶段并排对比。MVP 只做杀球。
+把你的杀球和同机位的教练示范逐阶段并排对比。设计见 `DESIGN.md`。
 
-## 目录
+## 结构
 
-- `DESIGN.md` 是设计文档。
-- `proto/clean.py` 是清洗管线（prep、swings、fine、ingest），教练视频和你自己的视频都走它。代码不调用模型。
-- `proto/db.py` 是素材库（SQLite）和全部词表。`python3 db.py` 把整个库导出成 JSON，前端读这个。
-- `proto/store.py` 是存储接口，负责派生文件的位置和与内网服务器的同步。
-- `proto/compare.py` 从库里按机位自动匹配教练示范，生成对比图。
-- `proto/.claude/skills/clean-coach-video/` 是 Claude Code 的 skill。看图标注由 Claude 子代理完成。
+```
+proto/
+  clean.py     清洗管线：prep → swings → fine → ingest
+  db.py        SQLite 素材库和全部词表
+  store.py     派生文件位置，与服务器同步
+  compare.py   生成对比图
+  pose.py      GPU 姿态关键点（在服务器上跑）
+  asr.py       没有 SRT 时的语音转写
+  test_db.py   自检
+  store/       派生文件（不进仓库）
+    lens.db                 素材库
+    coach/<视频名>/         教练视频：缩略图、挥拍图、预览片段、标签
+    user/<视频名>/          你的视频，同上
+    compare/<视频名>_<时间>.jpg   对比图
+```
 
-## 依赖
+视频目录里的文件按它在视频里的时间命名，例如 `swings/01m04.167s.jpg`。
 
-Python 3.10+、ffmpeg、rsync、`pip install pillow numpy`（Pillow 10.1 以上）。
+服务器 `ubuntu-8-179:~/badminton-lens/` 是同样的布局：`pose.py db.py store.py`、`store/`、`videos/`（源视频）、`models/`（姿态权重）、`.venv/`。
 
 ## 用法
 
-在 Claude Code 里说"清洗这个教练视频 <路径>"或"处理我的挥拍视频 <路径>"，skill 会跑完整个流程。手动跑：
+在 Claude Code 里说"清洗这个教练视频 <路径>"或"处理我的挥拍视频 <路径>"，`clean-coach-video` skill 会跑完全程。看图标注由 Claude 子代理完成，代码不调用视觉模型。
 
 ```bash
 cd proto
-python3 clean.py prep "<视频>"        # 自己的视频加 --user
-python3 clean.py swings "<视频>"      # 之后由 Claude 写 phase_labels.json
-python3 clean.py fine "<视频>"        # 之后由 Claude 写 fine_labels.json
-python3 clean.py ingest "<视频>"      # 校验标签，写入 store/lens.db
-python3 compare.py                    # 对比图在 store/compare/
-python3 test_db.py                    # 自检
+python3 clean.py prep "<视频>"     # 自己的视频加 --user
+python3 clean.py swings "<视频>"
+python3 clean.py fine "<视频>"
+python3 clean.py ingest "<视频>"
+python3 compare.py                 # 输出到 store/compare/
 ```
 
-## 数据约定
-
-- 时间一律是源视频里的秒。帧号只存在于缓存里，不进库。
-- 字段名和枚举值一律英文（`hit`、`racket_low`、`rear_oblique`），中文显示名只在 `db.py` 的词表里。
-- 视频 id 是内容哈希，片段和挥拍的 id 由视频 id 加时间组成，重跑不变。
-- 标签分层，后者覆盖前者：`model` < `pose` < `claude` < `human`。
-
-## 存储
-
-派生文件（缩略图、预览片段、数据库）都在 `proto/store/`，库里只记相对路径。
-
-| 环境变量 | 作用 |
-|---|---|
-| `LENS_STORE` | 本地存储根目录，默认 `proto/store`。也可以指向挂载的共享盘。 |
-| `LENS_REMOTE` | rsync 目标，例如 `ubuntu-8-179:badminton-lens/store`。只用 SSH 密钥，不写密码。 |
-| `LENS_VIDEOS` | 源视频根目录。设了以后库里记相对路径，换机器也能找到源视频。 |
-| `LENS_FONT` | 对比图用的中文字体，默认 macOS 的黑体。 |
+姿态关键点：
 
 ```bash
-LENS_REMOTE=ubuntu-8-179:badminton-lens/store python3 store.py push
+rsync -a pose.py db.py store.py ubuntu-8-179:badminton-lens/
+ssh ubuntu-8-179 'cd badminton-lens && .venv/bin/python pose.py all videos --devices 0,1,2'
+LENS_REMOTE=ubuntu-8-179:badminton-lens/store python3 store.py pull
 ```
+
+## 约定
+
+- 时间一律是源视频里的秒，字段和枚举一律英文，中文显示名只在 `db.py`。
+- 库里的 id 由内容哈希和时间组成，重跑不变；目录和文件名用视频名和时间，方便人看。
+- 标签分层，后者覆盖前者：`model` < `pose` < `claude` < `human`。
+- 环境变量：`LENS_STORE` 存储根目录，`LENS_REMOTE` 同步目标，`LENS_VIDEOS` 源视频根目录，`LENS_FONT` 中文字体。
+- 依赖：Python 3.10+、ffmpeg、rsync、`pip install pillow numpy`。
 
 ## 素材
 
-教练视频及由它生成的帧图、转写和清洗结果只在本地和内网服务器使用，已在 `.gitignore` 里排除，不要提交。没有 SRT 的视频只有在设置了 `DASHSCOPE_API_KEY` 时才会调用云端语音转写，否则不带字幕分类。
+教练视频和由它生成的一切只在本地和内网服务器使用，不进仓库。字幕优先读视频旁的 SRT；没有时，设置了 `DASHSCOPE_API_KEY` 才调用阿里语音转写。

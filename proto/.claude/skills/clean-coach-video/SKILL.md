@@ -1,11 +1,11 @@
 ---
 name: clean-coach-video
-description: Clean a badminton video into the swing library with clean.py, doing the vision labeling yourself through subagents. Covers coach videos (segments, swings, phases, camera side) and the user's own clips. Use when asked to clean, ingest, process, re-run, or relabel a video, or to fix swing labels in store/<video_id>/.
+description: Clean a badminton video into the swing library with clean.py, doing the vision labeling yourself through subagents. Covers coach videos (segments, swings, phases, camera side) and the user's own clips. Use when asked to clean, ingest, process, re-run, or relabel a video, or to fix swing labels in store/<role>/<video name>/.
 ---
 
 # Clean a video into the swing library
 
-Run from `proto/`. `<video>` is the video path. Each stage caches in `store/<video_id>/` and is safe to re-run. `prep` prints the id. The code calls no model. You are the vision model, so every label comes from you or a subagent reading a sheet image.
+Run from `proto/`. `<video>` is the video path. Each stage caches in `store/coach/<file name>/` or `store/user/<file name>/` and is safe to re-run. Sheets and clips are named by their time in the video, such as `swings/01m04.167s.jpg`. Labels are keyed by swing id, which `swings.json` maps to each sheet. The code calls no model. You are the vision model, so every label comes from you or a subagent reading a sheet image.
 
 Field names and values are English and come from the vocab tables at the top of `db.py`. Frame numbers in a label are the yellow `#` numbers on the sheet. `ingest` turns them into seconds.
 
@@ -13,7 +13,7 @@ Field names and values are English and come from the vocab tables at the top of 
 
 1. `python3 clean.py prep "<video>"`. Read `classify_task.md`. For each `sheets/sheet_XX.jpg` with its `.txt`, label every tile. Write all tiles to `tile_labels.json`.
 2. `python3 clean.py swings "<video>"`. Glance at the printed segment list. Read `phase_task.md`. For each sheet listed in `swings.json`, write its answer to `phase_labels.json` under the swing id.
-3. `python3 clean.py fine "<video>"`. Read `fine_task.md`. For each `fine/<swing id>.jpg`, write its answer to `fine_labels.json`. These override `racket_low` and `hit` from step 2.
+3. `python3 clean.py fine "<video>"`. Read `fine_task.md`. It lists each `fine/<time>.jpg` with its swing id. Write each answer to `fine_labels.json`. These override `racket_low` and `hit` from step 2.
 4. `python3 clean.py ingest "<video>"`. It validates every label and names each one it rejects. Fix those entries and run it again.
 
 To change a segment's kind after seeing its swings, write `segment_kinds.json` as `{"<segment id>": "slow_demo"}` and re-run `ingest`. Changing `tile_labels.json` instead means re-running `swings` and relabeling.

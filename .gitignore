@@ -8,12 +8,7 @@
 *.jpeg
 *.png
 proto/store/
-proto/work/
-proto/work_old/
-proto/coach_asr.*
-proto/coach_peaks.json
-proto/scenes.txt
-proto/sel.json
+proto/models/
 
 __pycache__/
 .DS_Store

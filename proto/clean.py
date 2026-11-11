@@ -1,7 +1,7 @@
 """Video cleaning pipeline: a coach video or your own clip -> swings with labeled phases in the library (db.py).
 
 The code spends no model tokens. The vision work is done by Claude subagents that read the *_task.md files and write
-the *_labels.json files (see .claude/skills/clean-coach-video). Every stage caches in store/<video_id>/ and is safe
+the *_labels.json files (see .claude/skills/clean-coach-video). Every stage caches in store/<role>/<file name>/ and is safe
 to re-run.
 
   python3 clean.py prep   <video> [--user]   transcript + shots + tiles + sheets       -> classify_task.md
@@ -12,7 +12,7 @@ to re-run.
 Sheets number their tiles with small frame offsets (#0, #2, ...). Labels answer with those numbers and ingest turns
 them into seconds, so frame numbers stay inside the cache.
 """
-import json, os, re, subprocess, sys
+import glob, json, os, re, subprocess, sys
 from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -70,11 +70,28 @@ def load(d, name):
 def dump(d, name, obj):
     (d / name).write_text(json.dumps(obj, ensure_ascii=False, indent=1))
 
+def folder(video, role=None):
+    """store/<role>/<file name>/. tiles.json inside records the content id, so a different file with the same name is caught."""
+    name, vid = Path(video).stem, db.video_id(video)
+    if role is None:
+        found = [p.parent for r in db.ROLE for p in store.ROOT.glob(f"{r}/{glob.escape(name)}/tiles.json")]
+        if not found:
+            sys.exit(f"run `clean.py prep` on {video} first")
+        d = found[0]
+    else:
+        d = store.dir(f"{role}/{name}")
+    if (d / "tiles.json").exists() and load(d, "tiles.json")["id"] != vid:
+        sys.exit(f"{d} already holds a different video named {name}: rename the file")
+    return d
+
 def cache(video):
-    d = store.dir(db.video_id(video))
-    if not (d / "tiles.json").exists():
-        sys.exit(f"run `clean.py prep` on {video} first")
+    d = folder(video)
     return d, load(d, "tiles.json")
+
+def stamp(item_id):
+    """File name for a segment or swing: its time in the video, e.g. 01m23.450s."""
+    ms = int(item_id.rsplit("_", 1)[1].lstrip("s"))
+    return f"{ms // 60000:02d}m{ms % 60000 / 1000:06.3f}s"
 
 def clock(t):
     return f"{int(t) // 60}:{int(t) % 60:02d}"
@@ -158,7 +175,7 @@ def scan(video, fps, wins, cut_times):
     return np.array(energy, np.float32), [(f, im) for _, f, im in best]
 
 def prep(video, role="coach"):
-    d = store.dir(db.video_id(video))
+    d = folder(video, role)
     fps, dur = probe(video)
     tr = transcript(video, d) if role == "coach" else []
     ct = cuts(video)
@@ -167,7 +184,7 @@ def prep(video, role="coach"):
     np.save(d / "energy.npy", energy)
     tiles = [{"k": k, "shot": s, "t0": round(a, 2), "t1": round(b, 2), "t": round(f / fps, 2),
               "text": text_in(tr, a, b)} for k, ((s, a, b), (f, _)) in enumerate(zip(wins, picks))]
-    dump(d, "tiles.json", {"id": d.name, "role": role, "name": Path(video).stem, "fps": fps, "duration": dur,
+    dump(d, "tiles.json", {"id": db.video_id(video), "role": role, "name": Path(video).stem, "fps": fps, "duration": dur,
                            "cuts": ct, "tiles": tiles})
     if role == "user":  # your own clip is one demo segment: nothing to classify
         print(f"{d.name}: user clip, {dur:.0f}s -> {d}")
@@ -333,9 +350,9 @@ def swings(video):
                 continue
             idx = list(range(0, len(fr), step))[:16]
             sid = f"{meta['id']}_{round(pts[p] * 1000):07d}"
-            grid_sheet([Image.fromarray(fr[i]).crop(box) for i in idx], [f"#{i}" for i in idx], sd / f"{sid}.jpg")
+            grid_sheet([Image.fromarray(fr[i]).crop(box) for i in idx], [f"#{i}" for i in idx], sd / f"{stamp(sid)}.jpg")
             out.append({"id": sid, "segment": s["id"], "first": first, "peak": p, "frames": len(fr),
-                        "box": [v / W if k % 2 == 0 else v / H for k, v in enumerate(box)], "sheet": f"swings/{sid}.jpg"})
+                        "box": [v / W if k % 2 == 0 else v / H for k, v in enumerate(box)], "sheet": f"swings/{stamp(sid)}.jpg"})
     dump(d, "segments_draft.json", segs)
     dump(d, "swings.json", out)
     (d / "phase_task.md").write_text(f"# 挥拍阶段标注任务\n\n对 swings.json 中每一项的 sheet 图作答，"
@@ -365,9 +382,10 @@ def fine(video):
         bx = sw["box"]
         box = (int(bx[0] * W), int(bx[1] * H), int(bx[2] * W), int(bx[3] * H))
         grid_sheet([Image.fromarray(f).crop(box) for f in fr], [f"#{first - sw['first'] + i}" for i in range(len(fr))],
-                   sd / f"{sw['id']}.jpg", cols=4 if n <= 16 else 5, tw=300 if n <= 16 else 240)
+                   sd / f"{stamp(sw['id'])}.jpg", cols=4 if n <= 16 else 5, tw=300 if n <= 16 else 240)
         jobs.append(sw["id"])
-    (d / "fine_task.md").write_text(f"# 逐帧精标任务\n\n对 fine/<swing id>.jpg（{', '.join(jobs)}）作答，"
+    pairs = "\n".join(f"- fine/{stamp(j)}.jpg -> {j}" for j in jobs)
+    (d / "fine_task.md").write_text(f"# 逐帧精标任务\n\n对下列每张图作答（图 -> swing id）：\n{pairs}\n\n"
                                     f"写入 fine_labels.json：{{\"<swing id>\": {{...}}}}。\n\n{FINE}\n")
     print(f"{len(jobs)} fine sheets -> {d / 'fine_task.md'}")
 
@@ -408,12 +426,13 @@ def ingest(video, source="claude"):
     cd = d / "clips"; cd.mkdir(exist_ok=True)
     for s in segs:
         s["kind"] = kinds.get(s["id"], s["kind"])
-        c = cd / f"{s['id']}.mp4"
+        c = cd / f"{stamp(s['id'])}.mp4"
         if not c.exists():
             subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{s['t0']:.2f}", "-i", video, "-t", f"{min(s['t1'] - s['t0'], 30):.2f}",
                             "-vf", "scale=-2:360", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-an",
                             "-movflags", "+faststart", str(c)], check=True)
     import time
+    rel = d.relative_to(store.ROOT).as_posix()
     with db.connect() as c:
         c.execute("INSERT INTO video VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET role=excluded.role, name=excluded.name, "
                   "src=excluded.src, fps=excluded.fps, duration=excluded.duration",
@@ -425,11 +444,11 @@ def ingest(video, source="claude"):
         c.execute("DELETE FROM segment WHERE video_id=?", (vid,))
         for s in segs:
             c.execute("INSERT INTO segment VALUES(?,?,?,?,?,?,?)",
-                      (s["id"], vid, s["t0"], s["t1"], s["kind"], s["text"], f"{vid}/clips/{s['id']}.mp4"))
+                      (s["id"], vid, s["t0"], s["t1"], s["kind"], s["text"], f"{rel}/clips/{stamp(s['id'])}.mp4"))
         for sw in sws:
             last = min(len(pts) - 1, sw["first"] + sw["frames"] - 1)
             c.execute("INSERT OR REPLACE INTO swing VALUES(?,?,?,?,?,?,?)",
-                      (sw["id"], vid, sw["segment"], pts[sw["first"]], pts[last], json.dumps(sw["box"]), f"{vid}/{sw['sheet']}"))
+                      (sw["id"], vid, sw["segment"], pts[sw["first"]], pts[last], json.dumps(sw["box"]), f"{rel}/{sw['sheet']}"))
             if sw["id"] in labels:
                 db.set_label(c, sw["id"], source, labels[sw["id"]])
     print(f"{meta['name']} ({vid}): {len(segs)} segments, {len(sws)} swings, "

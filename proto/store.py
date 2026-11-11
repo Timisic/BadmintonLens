@@ -18,8 +18,8 @@ def path(key):
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
 
-def dir(video_id):
-    return path(f"{video_id}/x").parent
+def dir(key):
+    return path(f"{key}/x").parent
 
 def rel_src(video):
     p = Path(video).resolve()

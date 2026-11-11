@@ -2,7 +2,7 @@
 coach over you: 5 phase columns plus N in-between frames per interval, placed at the same fraction of each interval
 for both rows, so different tempos still line up by phase. Every frame is captioned with its time from the hit.
 
-  python3 compare.py [name ...]     your video names (substring); default all -> store/compare/<swing id>.jpg
+  python3 compare.py [name ...]     your video names (substring); default all -> store/compare/<name>_<time>.jpg
 """
 import bisect, os, sys
 import numpy as np
@@ -78,7 +78,7 @@ def build(user, coach):
             d.text((k * tw + 4, y + th + 2), f"{shown[k]:+.2f}s", fill="black", font=fs)
         d.rectangle([0, y, 8 + d.textlength(label, font=fs), y + 20], fill="black")
         d.text((4, y + 2), label, fill="yellow", font=fs)
-    out = store.path(f"compare/{user['id']}.jpg")
+    out = store.path(f"compare/{user['name']}_{clean.stamp(user['id'])}.jpg")
     c.save(out, quality=85)
     print(f"{user['name']} <- {best['name']} {clean.clock(best['label']['hit'])} {note} -> {out}")
 
