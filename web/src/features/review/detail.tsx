@@ -53,6 +53,7 @@ export function ReviewDetail() {
   const before = all.slice(0, at).filter(matches)
   const prev: Entry | undefined = before[before.length - 1]
   const next = all.slice(at + 1).find(matches)
+  const comparable = video.role === 'user' && swing.label.usable
 
   return (
     <div className='flex flex-col gap-4'>
@@ -65,6 +66,13 @@ export function ReviewDetail() {
         </span>
         <SwingBadges label={swing.label} />
         <span className='ms-auto flex gap-2'>
+          {comparable && (
+            <Button variant='outline' size='sm' asChild>
+              <Link to='/compare' search={{ swing: swing.id }}>
+                去对比
+              </Link>
+            </Button>
+          )}
           <Neighbour entry={prev}>上一拍</Neighbour>
           <Neighbour entry={next}>下一拍</Neighbour>
         </span>

@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteRouteImport } from './routes/_app/route'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppCompareRouteImport } from './routes/_app/compare'
 import { Route as AppReviewRouteRouteImport } from './routes/_app/review/route'
 import { Route as AppReviewIndexRouteImport } from './routes/_app/review/index'
 import { Route as AppVideosIdRouteImport } from './routes/_app/videos.$id'
@@ -23,6 +24,11 @@ const AppRouteRoute = AppRouteRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppCompareRoute = AppCompareRouteImport.update({
+  id: '/compare',
+  path: '/compare',
   getParentRoute: () => AppRouteRoute,
 } as any)
 const AppReviewRouteRoute = AppReviewRouteRouteImport.update({
@@ -49,11 +55,13 @@ const AppReviewSwingIdRoute = AppReviewSwingIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/review': typeof AppReviewRouteRouteWithChildren
+  '/compare': typeof AppCompareRoute
   '/review/$swingId': typeof AppReviewSwingIdRoute
   '/videos/$id': typeof AppVideosIdRoute
   '/review/': typeof AppReviewIndexRoute
 }
 export interface FileRoutesByTo {
+  '/compare': typeof AppCompareRoute
   '/': typeof AppIndexRoute
   '/review/$swingId': typeof AppReviewSwingIdRoute
   '/videos/$id': typeof AppVideosIdRoute
@@ -63,6 +71,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteRouteWithChildren
   '/_app/review': typeof AppReviewRouteRouteWithChildren
+  '/_app/compare': typeof AppCompareRoute
   '/_app/': typeof AppIndexRoute
   '/_app/review/$swingId': typeof AppReviewSwingIdRoute
   '/_app/videos/$id': typeof AppVideosIdRoute
@@ -70,13 +79,20 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/review' | '/review/$swingId' | '/videos/$id' | '/review/'
+  fullPaths:
+    | '/'
+    | '/review'
+    | '/compare'
+    | '/review/$swingId'
+    | '/videos/$id'
+    | '/review/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/review/$swingId' | '/videos/$id' | '/review'
+  to: '/compare' | '/' | '/review/$swingId' | '/videos/$id' | '/review'
   id:
     | '__root__'
     | '/_app'
     | '/_app/review'
+    | '/_app/compare'
     | '/_app/'
     | '/_app/review/$swingId'
     | '/_app/videos/$id'
@@ -101,6 +117,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/compare': {
+      id: '/_app/compare'
+      path: '/compare'
+      fullPath: '/compare'
+      preLoaderRoute: typeof AppCompareRouteImport
       parentRoute: typeof AppRouteRoute
     }
     '/_app/review': {
@@ -150,12 +173,14 @@ const AppReviewRouteRouteWithChildren = AppReviewRouteRoute._addFileChildren(
 
 interface AppRouteRouteChildren {
   AppReviewRouteRoute: typeof AppReviewRouteRouteWithChildren
+  AppCompareRoute: typeof AppCompareRoute
   AppIndexRoute: typeof AppIndexRoute
   AppVideosIdRoute: typeof AppVideosIdRoute
 }
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppReviewRouteRoute: AppReviewRouteRouteWithChildren,
+  AppCompareRoute: AppCompareRoute,
   AppIndexRoute: AppIndexRoute,
   AppVideosIdRoute: AppVideosIdRoute,
 }
