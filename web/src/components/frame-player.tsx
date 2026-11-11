@@ -29,7 +29,7 @@ type FramePlayerProps = {
   marks?: { t: number; name: string }[]
   /** A cell in a grid of stills: step buttons appear over the picture. */
   still?: boolean
-  /** Width over height every picture should share; the box grows to fill it. */
+  /** Width over height every picture should share; the box is fitted inside it. */
   frame?: number
   format?: (t: number) => string
   onFrame?: (t: number) => void
@@ -53,8 +53,12 @@ export function FramePlayer({
   const [time, setTime] = useState(start)
   const [aspect, setAspect] = useState(16 / 9)
   const [playing, setPlaying] = useState(false)
-  const [x0, y0, x1, y1] = fit(box ?? [0, 0, 1, 1], aspect, frame)
+  const [x0, y0, x1, y1] = box ?? [0, 0, 1, 1]
   const ratio = frame ?? (aspect * (x1 - x0)) / (y1 - y0)
+  // Scale the picture until the whole box fits the frame, then centre the box.
+  // Whatever of the picture lies around the box fills the rest of the frame.
+  const scale = Math.min(1 / (x1 - x0), aspect / (ratio * (y1 - y0)))
+  const tall = (scale * ratio) / aspect
 
   const seek = (t: number) => {
     video.current!.pause()
@@ -109,10 +113,11 @@ export function FramePlayer({
           src={sourceUrl(videoId)}
           muted
           playsInline
-          className='block max-w-none'
+          className='absolute max-w-none'
           style={{
-            width: `${100 / (x1 - x0)}%`,
-            transform: `translate(${-x0 * 100}%, ${-y0 * 100}%)`,
+            width: `${scale * 100}%`,
+            left: `${(0.5 - (scale * (x0 + x1)) / 2) * 100}%`,
+            top: `${(0.5 - (tall * (y0 + y1)) / 2) * 100}%`,
           }}
           onLoadedMetadata={({ currentTarget: v }) => {
             setAspect(v.videoWidth / v.videoHeight)
@@ -181,16 +186,4 @@ export function FramePlayer({
       )}
     </div>
   )
-}
-
-// Grow the box around its centre until it has the frame's shape, staying inside the picture.
-function fit(box: Box, aspect: number, frame?: number): Box {
-  if (!frame) return box
-  let w = box[2] - box[0]
-  let h = box[3] - box[1]
-  if ((w * aspect) / h < frame) w = Math.min(1, (frame * h) / aspect)
-  else h = Math.min(1, (w * aspect) / frame)
-  const x = Math.min(Math.max(0, (box[0] + box[2] - w) / 2), 1 - w)
-  const y = Math.min(Math.max(0, (box[1] + box[3] - h) / 2), 1 - h)
-  return [x, y, x + w, y + h]
 }

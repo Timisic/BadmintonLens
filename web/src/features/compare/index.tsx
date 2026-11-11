@@ -73,15 +73,16 @@ function Aligned({ match }: { match: Match }) {
       <div
         className='grid items-center gap-x-4 gap-y-3'
         style={{
-          gridTemplateColumns: `5rem repeat(${match.cols.length}, minmax(0, 1fr))`,
+          gridTemplateColumns: `5rem repeat(${match.cols.length * 2 - 1}, minmax(0, 1fr))`,
         }}
       >
         <span />
-        {match.cols.map((name) => (
-          <h2 key={name} className='text-sm font-medium'>
+        {match.cols.flatMap((name, i) => [
+          ...(i ? [<span key={`${name}-before`} />] : []),
+          <h2 key={name} className='text-center text-sm font-medium'>
             {name}
-          </h2>
-        ))}
+          </h2>,
+        ])}
         {match.coach ? (
           <Row side={match.coach} step={match.step} />
         ) : (
@@ -120,15 +121,17 @@ function Row({
       </div>
       {times
         .filter((_, i) => i % step === 0)
+        // each phase, and the moment halfway to the next one
+        .flatMap((t, i, keys) => (i ? [(keys[i - 1] + t) / 2, t] : [t]))
         .map((t) => (
           <FramePlayer
             key={t}
             still
-            frame={4 / 5}
+            frame={9 / 16}
             videoId={swing.video_id}
             fps={swing.fps}
             start={t}
-            maxHeight='calc(50svh - 8rem)'
+            maxHeight='calc(50svh - 7.5rem)'
             box={swing.box}
             format={fromHit}
           />
