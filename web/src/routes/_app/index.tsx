@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Main } from '@/components/layout/main'
+import { VideoTable } from '@/features/library'
 
 export const Route = createFileRoute('/_app/')({
-  component: Main,
+  component: VideoTable,
 })
