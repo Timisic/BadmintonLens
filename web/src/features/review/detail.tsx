@@ -190,7 +190,13 @@ function LabelForm({
             id={key}
             none='未标'
             options={YES_NO}
-            value={draft[key]?.toString()}
+            value={
+              draft[key] === undefined
+                ? undefined
+                : draft[key]
+                  ? 'true'
+                  : 'false'
+            }
             onChange={(v) =>
               set({ [key]: v === undefined ? undefined : v === 'true' })
             }

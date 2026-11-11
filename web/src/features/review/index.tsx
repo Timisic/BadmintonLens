@@ -36,7 +36,7 @@ export function ReviewLayout() {
           none='可用与否都看'
           value={search.usable}
           options={{ yes: '可用', no: '不可用', unset: '没标可用与否' }}
-          onChange={(usable) => filter({ usable: usable as Search['usable'] })}
+          onChange={(usable) => filter({ usable })}
         />
         <Choice
           aria-label='按标签来源筛选'

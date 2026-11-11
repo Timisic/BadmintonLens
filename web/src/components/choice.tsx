@@ -9,33 +9,33 @@ import {
 // Radix Select has no empty value, so "nothing chosen" is an item of its own.
 const NONE = '__none__'
 
-type ChoiceProps = {
-  value: string | undefined
-  options: Record<string, string>
+type ChoiceProps<K extends string> = {
+  value: K | undefined
+  options: Record<K, string>
   none: string
-  onChange: (value: string | undefined) => void
+  onChange: (value: K | undefined) => void
   id?: string
   'aria-label'?: string
 }
 
-export function Choice({
+export function Choice<K extends string>({
   value,
   options,
   none,
   onChange,
   ...props
-}: ChoiceProps) {
+}: ChoiceProps<K>) {
   return (
     <Select
       value={value ?? NONE}
-      onValueChange={(v) => onChange(v === NONE ? undefined : v)}
+      onValueChange={(v) => onChange(v === NONE ? undefined : (v as K))}
     >
       <SelectTrigger className='w-full' {...props}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={NONE}>{none}</SelectItem>
-        {Object.entries(options).map(([key, name]) => (
+        {Object.entries<string>(options).map(([key, name]) => (
           <SelectItem key={key} value={key}>
             {name}
           </SelectItem>

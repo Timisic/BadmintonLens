@@ -43,10 +43,11 @@ export function FramePlayer({
     seek(video.current!.currentTime + frames / fps)
   useImperativeHandle(ref, () => ({ seek, step }))
 
-  // Before the metadata loads this sets the position the video opens at.
+  // Covers a new start in the same video. A new video is positioned once its
+  // metadata loads, below.
   useEffect(() => {
     video.current!.currentTime = start
-  }, [videoId, start])
+  }, [start])
 
   // Phone video is variable frame rate, so currentTime is only where we asked
   // to be. mediaTime is the timestamp of the frame actually on screen.
@@ -63,7 +64,10 @@ export function FramePlayer({
   return (
     <div className='flex flex-col gap-2'>
       <div
-        className={cn('overflow-hidden rounded-md bg-black', className)}
+        className={cn(
+          'self-start overflow-hidden rounded-md bg-black',
+          className
+        )}
         style={{ aspectRatio: (aspect * (x1 - x0)) / (y1 - y0) }}
       >
         <video
@@ -76,9 +80,10 @@ export function FramePlayer({
             width: `${100 / (x1 - x0)}%`,
             transform: `translate(${-x0 * 100}%, ${-y0 * 100}%)`,
           }}
-          onLoadedMetadata={(e) =>
-            setAspect(e.currentTarget.videoWidth / e.currentTarget.videoHeight)
-          }
+          onLoadedMetadata={({ currentTarget: v }) => {
+            setAspect(v.videoWidth / v.videoHeight)
+            v.currentTime = start
+          }}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
         />
