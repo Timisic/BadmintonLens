@@ -1,100 +1,140 @@
-import { Fragment } from 'react'
-import { Link, Outlet, getRouteApi, useNavigate } from '@tanstack/react-router'
-import { UserCheck } from 'lucide-react'
-import { clock, useLibrary } from '@/lib/library'
-import { cn } from '@/lib/utils'
+import { Link, getRouteApi } from '@tanstack/react-router'
+import { Trash2, Undo2 } from 'lucide-react'
+import { toast } from 'sonner'
+import { clock, thumbUrl, useLibrary, useSaveLabel } from '@/lib/library'
+import { Toggle } from '@/components/ui/toggle'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { Choice } from '@/components/choice'
+import { IconButton } from '@/components/icon-button'
 import { Main } from '@/components/layout/main'
-import { useReviewList } from './list'
 
 const route = getRouteApi('/_app/review')
-type Search = ReturnType<typeof route.useSearch>
 
-export function ReviewLayout() {
-  const lib = useLibrary()
-  const search = route.useSearch()
-  const navigate = useNavigate()
-  const { all, matches } = useReviewList()
-  const shown = all.filter(matches)
-  const filter = (patch: Search) =>
-    navigate({ to: '.', search: (prev) => ({ ...prev, ...patch }) })
+/** Every swing as a picture. The only decision here is keep or delete. */
+export function Swings() {
+  const { vocab, videos } = useLibrary()
+  const { who, deleted } = route.useSearch()
+  const navigate = route.useNavigate()
+  const save = useSaveLabel()
+
+  const ofRole = videos.filter((v) => v.role === (who ?? 'user'))
+  const gone = ofRole.flatMap((v) => v.swings).filter((s) => !s.label.usable)
+  const groups = ofRole
+    .map((video) => ({
+      video,
+      swings: video.swings.filter((s) => !s.label.usable === !!deleted),
+    }))
+    .filter((g) => g.swings.length > 0)
+
+  const keep = (id: string, usable: boolean, undo = true) =>
+    save.mutate(
+      { id, label: { usable } },
+      {
+        onError: (e) => toast.error(e.message),
+        onSuccess: () =>
+          undo &&
+          toast(usable ? '已恢复' : '已删除', {
+            action: { label: '撤销', onClick: () => keep(id, !usable, false) },
+          }),
+      }
+    )
 
   return (
-    <Main fixed fluid className='gap-6 pt-2 lg:flex-row'>
-      <aside className='flex max-h-[32svh] min-h-0 shrink-0 flex-col gap-3 lg:max-h-none lg:w-60'>
-        <Choice
-          aria-label='按视频筛选'
-          none='全部视频'
-          value={search.video}
-          options={Object.fromEntries(lib.videos.map((v) => [v.id, v.name]))}
-          onChange={(video) => filter({ video })}
-        />
-        <ToggleGroup
-          type='single'
-          variant='outline'
-          size='sm'
-          className='w-full'
-          aria-label='筛选挥拍'
-          value={search.show ?? 'all'}
-          onValueChange={(v) =>
-            filter({ show: v === 'usable' || v === 'todo' ? v : undefined })
-          }
-        >
-          <ToggleGroupItem value='all' className='flex-1'>
-            全部
-          </ToggleGroupItem>
-          <ToggleGroupItem value='usable' className='flex-1'>
-            可用
-          </ToggleGroupItem>
-          <ToggleGroupItem value='todo' className='flex-1'>
-            未审
-          </ToggleGroupItem>
-        </ToggleGroup>
-        <nav className='flex min-h-0 flex-col overflow-y-auto rounded-lg border'>
-          {shown.map(({ video, swing }, i) => (
-            <Fragment key={swing.id}>
-              {video !== shown[i - 1]?.video && (
-                <h2 className='sticky top-0 shrink-0 truncate border-b bg-muted px-3 py-1.5 text-sm font-medium'>
-                  {video.name}
-                </h2>
-              )}
-              <Link
-                to='/review/$swingId'
-                params={{ swingId: swing.id }}
-                search
-                className={cn(
-                  'flex h-9 shrink-0 items-center justify-between border-b px-3 text-sm last:border-b-0 hover:bg-accent',
-                  !swing.label.usable && 'text-muted-foreground'
-                )}
-                activeProps={{ className: 'bg-accent' }}
-              >
-                <span className='font-mono tabular-nums'>
-                  {clock(swing.t0)}
-                </span>
-                {swing.label.source === 'human' ? (
-                  <UserCheck className='size-4' aria-label='已审' />
-                ) : (
-                  swing.label.usable && (
-                    <span
-                      className='size-2 rounded-full bg-primary'
-                      aria-label='可用'
-                    />
-                  )
-                )}
-              </Link>
-            </Fragment>
-          ))}
-          {shown.length === 0 && (
-            <p className='p-3 text-sm text-muted-foreground'>
-              没有符合条件的挥拍。
-            </p>
-          )}
-        </nav>
-      </aside>
-      <div className='min-h-0 min-w-0 flex-1 overflow-y-auto'>
-        <Outlet />
+    <Main fluid className='flex flex-col gap-6 pt-2'>
+      <div className='flex flex-wrap items-center justify-between gap-3'>
+        <h1 className='text-2xl font-bold tracking-tight'>挥拍</h1>
+        <div className='flex items-center gap-2'>
+          <Toggle
+            variant='outline'
+            size='sm'
+            pressed={!!deleted}
+            onPressedChange={(on) =>
+              navigate({ search: { who, deleted: on || undefined } })
+            }
+          >
+            <Trash2 /> 已删除 {gone.length}
+          </Toggle>
+          <ToggleGroup
+            type='single'
+            variant='outline'
+            size='sm'
+            aria-label='谁的挥拍'
+            value={who ?? 'user'}
+            onValueChange={(v) =>
+              v &&
+              navigate({
+                search: { deleted, who: v === 'coach' ? v : undefined },
+              })
+            }
+          >
+            <ToggleGroupItem value='user'>{vocab.role.user}</ToggleGroupItem>
+            <ToggleGroupItem value='coach'>{vocab.role.coach}</ToggleGroupItem>
+          </ToggleGroup>
+        </div>
       </div>
+
+      {groups.map(({ video, swings }) => {
+        const cameras = [
+          ...new Set(swings.flatMap((s) => s.label.camera ?? [])),
+        ]
+        return (
+          <section key={video.id} className='flex flex-col gap-3'>
+            <h2 className='flex items-baseline gap-2 font-medium'>
+              {video.name}
+              <span className='text-sm font-normal text-muted-foreground'>
+                {[
+                  cameras.length === 1 && vocab.camera[cameras[0]],
+                  `${swings.length} 拍`,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+            </h2>
+            <ul className='grid grid-cols-[repeat(auto-fill,minmax(6rem,1fr))] gap-3'>
+              {swings.map((swing) => (
+                <li key={swing.id} className='relative flex flex-col gap-1'>
+                  <Link
+                    to='/review/$swingId'
+                    params={{ swingId: swing.id }}
+                    search
+                    aria-label={`${video.name} ${clock(swing.t0)}`}
+                    className='overflow-hidden rounded-lg border bg-muted transition-opacity hover:opacity-80'
+                  >
+                    <img
+                      src={thumbUrl(swing.id, swing.label.hit)}
+                      alt=''
+                      loading='lazy'
+                      className='aspect-[1/2] w-full object-cover'
+                    />
+                  </Link>
+                  <span className='flex justify-between text-xs text-muted-foreground'>
+                    <span className='font-mono tabular-nums'>
+                      {clock(swing.label.hit ?? swing.t0)}
+                    </span>
+                    {cameras.length > 1 &&
+                      swing.label.camera &&
+                      vocab.camera[swing.label.camera]}
+                  </span>
+                  <IconButton
+                    label={deleted ? '恢复' : '删除'}
+                    variant='secondary'
+                    className='absolute top-1.5 right-1.5 size-7'
+                    onClick={() => keep(swing.id, !!deleted)}
+                  >
+                    {deleted ? <Undo2 /> : <Trash2 />}
+                  </IconButton>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      })}
+      {groups.length === 0 && (
+        <p className='rounded-lg border border-dashed p-8 text-center text-muted-foreground'>
+          {deleted
+            ? '没有删除过的挥拍。'
+            : '这里还没有挥拍。先用 clean.py 清洗一个视频。'}
+        </p>
+      )}
     </Main>
   )
 }

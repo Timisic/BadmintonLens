@@ -12,13 +12,11 @@ import store
 # value -> 显示名. Code, prompts and the database use the English value; Chinese lives only in these tables.
 KIND = {"talk": "口播讲解", "slow_demo": "慢速分解", "demo": "全速正确示范", "wrong_demo": "错误示范",
         "match": "比赛实战", "ad": "广告", "other": "其他"}
-CAMERA = {"front": "正面", "back": "背后", "rear_oblique": "斜后", "side": "侧面", "front_oblique": "斜前"}
-RACKET_SIDE = {"left": "画面左", "right": "画面右"}
-CONFIDENCE = {"high": "高", "medium": "中", "low": "低"}
-PHASE = {"backswing": "引拍侧身", "racket_low": "拍头最低点", "hit": "击球点", "follow": "随挥收拍"}
+# where the camera stands, seen from the player as they hit forward; the same four for coach and user
+CAMERA = {"front": "正面", "left": "左侧面", "right": "右侧面", "back": "背后"}
 ROLE = {"coach": "教练", "user": "我"}
 DEMO = {"demo", "wrong_demo"}
-# label layers, later wins: legacy vision model, Claude subagent, pose estimation (compare.py refine: the hit), person
+# label layers, later wins: legacy vision model, Claude subagent, pose estimation (compare.py refine), person
 SOURCE = {"model": "旧模型", "claude": "Claude", "pose": "姿态", "human": "人工"}
 SOURCES = list(SOURCE)
 
@@ -47,23 +45,19 @@ def video_id(path):
     return h.hexdigest()[:12]
 
 def check_label(d):
-    """Labels are written by agents and people: nothing outside the vocabulary reaches the library."""
-    enums = {"usable": (True, False), "face_visible": (True, False), "camera": CAMERA, "racket_side": RACKET_SIDE,
-             "confidence": CONFIDENCE}
+    """Labels are written by agents and people: nothing outside the vocabulary reaches the library.
+    usable: a real swing worth comparing (false is how a swing is deleted). hit: seconds. camera: see CAMERA."""
     for k, v in d.items():
-        if k in enums:
-            if v is not None and v not in enums[k]:
-                raise ValueError(f"{k}={v!r}, expected one of {list(enums[k])}")
-        elif k in PHASE:
-            if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float))):
-                raise ValueError(f"{k}={v!r}, expected seconds or null")
-        elif k != "note":
+        if k not in ("usable", "camera", "hit"):
             raise ValueError(f"unknown field {k!r}")
-    seq = [d[k] for k in PHASE if d.get(k) is not None]
-    if seq != sorted(seq):
-        raise ValueError(f"phases out of order: {({k: d.get(k) for k in PHASE})}")
-    if d.get("usable") and d.get("hit") is None:
-        raise ValueError("usable swing needs hit")
+        if v is None:
+            continue
+        if k == "usable" and not isinstance(v, bool):
+            raise ValueError(f"usable={v!r}, expected true or false")
+        if k == "camera" and v not in CAMERA:
+            raise ValueError(f"camera={v!r}, expected one of {list(CAMERA)}")
+        if k == "hit" and (isinstance(v, bool) or not isinstance(v, (int, float))):
+            raise ValueError(f"hit={v!r}, expected seconds or null")
     return d
 
 def set_label(c, swing_id, source, data):
@@ -91,8 +85,7 @@ def swings(c, role=None):
 
 def library(c):
     sw = swings(c)
-    return {"vocab": {"kind": KIND, "camera": CAMERA, "racket_side": RACKET_SIDE, "confidence": CONFIDENCE,
-                      "phase": PHASE, "role": ROLE, "source": SOURCE},
+    return {"vocab": {"kind": KIND, "camera": CAMERA, "role": ROLE, "source": SOURCE},
             "videos": [{**dict(v),
                         "segments": [dict(g) for g in c.execute("SELECT * FROM segment WHERE video_id=? ORDER BY t0", (v["id"],))],
                         "swings": [{k: s[k] for k in ("id", "segment_id", "t0", "t1", "box", "sheet", "label")}

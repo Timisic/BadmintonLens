@@ -5,7 +5,7 @@ description: Drive the BadmintonLens web frontend (web/, React on Vite) and its 
 
 # Verify BadmintonLens
 
-The app is a local web tool with three pages: library, review, compare. This skill starts an isolated instance, drives it with Playwright in system Chrome, and leaves screenshots in `.verify/evidence/`.
+The app is a local web tool with three pages: library, swings, compare. This skill starts an isolated instance, drives it with Playwright in system Chrome, and leaves screenshots in `.verify/evidence/`.
 
 All paths are from the repo root. The instance never touches `proto/store`. It works on a copy in `.verify/store`, so saving labels in a journey is safe.
 
@@ -35,9 +35,9 @@ It opens `<path>` at 1440×900, runs the optional `--do` body with a Playwright 
 
 Get real ids from `curl -s localhost:8765/api/library`. In zsh, unquoted variables do not split, so pass ids one by one.
 
-Stable handles: roles and Chinese names. `getByRole('button', { name: '保存' })`, `'设为当前帧'`, `'上一帧'`, `'下一帧'`, `'跳到击球点'`, `getByRole('radio', { name: '否' })`. Keys on the review page: `ArrowLeft`/`ArrowRight` frame, `Space` play, `1`–`4` capture a phase, `ArrowUp`/`ArrowDown` previous and next swing, `Meta+s` save.
+Stable handles: roles and Chinese names. `getByRole('button', { name: '设为当前帧' })`, `'上一帧'`, `'下一帧'`, `'跳到击球点'`, `'删除'`, `'恢复'`, `getByRole('radio', { name: '左侧面' })`. Keys on a swing page: `ArrowLeft`/`ArrowRight` frame, `Space` play.
 
-`node .claude/skills/verify/time.mjs <path> [runs]` prints the milliseconds from navigation until every `<video>` on the page shows its frame. The compare page with 18 videos (tab 逐帧) takes about 0.8 s on this machine with the `play.mp4` copies (1.5 s from the HEVC sources); treat a jump well past that as a regression.
+`node .claude/skills/verify/time.mjs <path> [runs]` prints the milliseconds from navigation until every `<video>` on the page shows its frame. The compare page with 14 stills, the finding stills and the lesson videos takes about 1.4 s on this machine once warm (the first load after a restart is slower); treat a jump well past that as a regression.
 
 The API also serves `web/dist` on its own port, so `http://127.0.0.1:8765/` is the built app after `pnpm build`.
 

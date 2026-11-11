@@ -1,11 +1,11 @@
 # Library
 
 ## Sub-features
-- Table of videos with role, cameras, duration, usable / total swings, reviewed count. Sortable.
+- Table of videos with role, cameras, duration, swing count. Sortable.
 - Video page with two tabs: swings (contact sheets) and segments (clips with transcript).
 
 ## How to get to it (user POV)
-Sidebar 素材库. Click a row to open the video. Click a swing to land in review.
+Sidebar 素材库. Click a row to open the video. Click a swing to open its swing page.
 
 ## Driving it with shoot.mjs
 ```bash

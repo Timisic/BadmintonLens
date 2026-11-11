@@ -23,10 +23,7 @@ import { Main } from '@/components/layout/main'
 
 const col = createColumnHelper<Video>()
 
-const count = (v: Video) => ({
-  usable: v.swings.filter((s) => s.label.usable).length,
-  reviewed: v.swings.filter((s) => s.label.source === 'human').length,
-})
+const usable = (v: Video) => v.swings.filter((s) => s.label.usable)
 
 export function VideoTable() {
   const { vocab, videos } = useLibrary()
@@ -56,7 +53,7 @@ export function VideoTable() {
     }),
     col.accessor(
       (v) =>
-        [...new Set(v.swings.flatMap((s) => s.label.camera ?? []))]
+        [...new Set(usable(v).flatMap((s) => s.label.camera ?? []))]
           .map((camera) => vocab.camera[camera] ?? camera)
           .join(' · '),
       { id: 'cameras', header: '机位' }
@@ -65,20 +62,7 @@ export function VideoTable() {
       header: '时长',
       cell: ({ getValue }) => clock(getValue()).replace(/\.\d+$/, ''),
     }),
-    col.accessor((v) => count(v).usable, {
-      id: 'usable',
-      header: '可用 / 拍数',
-      cell: ({ row, getValue }) => (
-        <>
-          {getValue()}
-          <span className='text-muted-foreground'>
-            {' '}
-            / {row.original.swings.length}
-          </span>
-        </>
-      ),
-    }),
-    col.accessor((v) => count(v).reviewed, { id: 'reviewed', header: '已审' }),
+    col.accessor((v) => usable(v).length, { id: 'usable', header: '挥拍' }),
   ]
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({

@@ -45,11 +45,8 @@ PHASES = f"""这是一次杀球挥拍的连续帧网格（每格左上角 #编�
   顺序必须是 backswing < racket_low < hit < follow，不在图里的填 null。
 - racket_height：网格每行 4 格，逐行填拍头大多在 above_head（头顶以上）/ shoulder_to_head（肩到头之间）/ below_waist（腰以下），共 4 项。
 - usable：这组帧里没有完整的杀球挥拍（只是举拍到准备姿势、走动、比划、半截动作）填 false。
-- camera：拍摄者相对球员的位置，以引拍侧身时为准。{opts(db.CAMERA)}
-- face_visible：只看第一行。看得到眼睛和鼻子填 true，只看到后脑勺或头发填 false。
-- racket_side：只看第一行。球拍（拍框）在画面里位于身体的 left 还是 right，以看图的人的左右为准，不是球员本人的。
 - confidence：high / medium / low。
-只输出 JSON：{{"racket_height":["","","",""],"usable":true,"camera":"","face_visible":true,"racket_side":"","backswing":null,"racket_low":null,"hit":null,"follow":null,"confidence":"","note":"一句话"}}"""
+只输出 JSON：{{"racket_height":["","","",""],"usable":true,"backswing":null,"racket_low":null,"hit":null,"follow":null,"confidence":"","note":"一句话"}}"""
 
 FINE = """这是同一次杀球在击球前后的逐帧网格（每格左上角 #编号 是帧序号，相邻格相差 1 帧，编号和挥拍图是同一套）。
 没球时 hit（击球点）指拍面挥到最高、最前、速度最快的那一帧；racket_low（拍头最低点）指引拍后拍头在背后下沉到最低的那一帧（不在本网格内填 null）。
@@ -401,50 +398,9 @@ def to_label(sw, p, pts):
     # agents call a racket raise a swing; a smash ends lower than it starts, a raise the opposite
     if len(h) == 4 and None not in h and h[-1] >= h[0]:
         p.update(usable=False, note="拍头没有从高处挥下；" + (p.get("note") or ""))
-    for k in db.PHASE:
-        if p.get(k) is not None:
-            p[k] = round(pts[max(0, min(len(pts) - 1, sw["first"] + p[k]))], 3)
-    return p
-
-def play(video):
-    """Browser copy, store/<role>/<name>/play.mp4: H.264 that every browser decodes, a keyframe each half second so a
-    seek is quick, index first so it starts before the whole file arrives. Frame times are the source's, exactly:
-    labels are seconds of the source and must name the same frame in both files."""
-    d, meta = cache(video)
-    out = d / "play.mp4"
-    if not out.exists():
-        tb = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=time_base",
-                             "-of", "csv=p=0", video], capture_output=True, text=True, check=True).stdout
-        part = d / "play.part.mp4"
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", video, "-an", "-c:v", "libx264", "-preset", "veryfast",
-                        "-crf", "23", "-g", str(round(meta["fps"] / 2)), "-pix_fmt", "yuv420p", "-fps_mode", "passthrough",
-                        "-enc_time_base", "demux", "-video_track_timescale", tb.strip().strip(",").split("/")[1],
-                        "-movflags", "+faststart", str(part)], check=True)
-        if frame_pts(part) != frame_pts(video):
-            part.unlink()
-            sys.exit(f"{video}: the browser copy's frame times differ from the source's")
-        part.replace(out)
-    return out
-
-def play_all():
-    with db.connect() as c:
-        rows = c.execute("SELECT name, src FROM video").fetchall()
-    for r in rows:
-        if store.src(r["src"]).is_file():
-            print(play(str(store.src(r["src"]))))
-        else:
-            print(f"{r['name']}: source not at {r['src']} (clean.py relocate <dir>)")
-
-def relocate(root):
-    """A video's id is a hash of its content, so a moved or renamed source is still recognisable."""
-    with db.connect() as c:
-        known = {r["id"]: r["name"] for r in c.execute("SELECT id, name FROM video")}
-        for p in sorted(Path(root).rglob("*")):
-            if p.suffix.lower() in (".mp4", ".mov", ".m4v") and p.is_file() and (vid := db.video_id(p)) in known:
-                c.execute("UPDATE video SET src=? WHERE id=?", (store.rel_src(p), vid))
-                print(f"{known.pop(vid)} -> {p}")
-    for name in known.values():
-        print(f"{name}: not found under {root}")
+    # the library keeps whether it is a swing and where the hit is; compare.py refine reads the rest off the pose
+    hit = p.get("hit")
+    return {"usable": p.get("usable"), "hit": hit if hit is None else round(pts[max(0, min(len(pts) - 1, sw["first"] + hit))], 3)}
 
 def ingest(video, source="claude"):
     d, meta = cache(video)

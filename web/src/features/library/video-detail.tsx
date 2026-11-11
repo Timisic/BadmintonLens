@@ -12,6 +12,7 @@ export function VideoDetail() {
   const { vocab, videos } = useLibrary()
   const video = videos.find((v) => v.id === id)
   if (!video) throw notFound()
+  const swings = video.swings.filter((s) => s.label.usable)
 
   return (
     <Main fluid className='flex flex-col gap-4 pt-2'>
@@ -24,7 +25,7 @@ export function VideoDetail() {
 
       <Tabs defaultValue='swings'>
         <TabsList>
-          <TabsTrigger value='swings'>挥拍 {video.swings.length}</TabsTrigger>
+          <TabsTrigger value='swings'>挥拍 {swings.length}</TabsTrigger>
           <TabsTrigger value='segments'>
             片段 {video.segments.length}
           </TabsTrigger>
@@ -32,7 +33,7 @@ export function VideoDetail() {
 
         <TabsContent value='swings'>
           <div className='grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-4'>
-            {video.swings.map((swing) => (
+            {swings.map((swing) => (
               <Link
                 key={swing.id}
                 to='/review/$swingId'
@@ -56,7 +57,7 @@ export function VideoDetail() {
               </Link>
             ))}
           </div>
-          {video.swings.length === 0 && (
+          {swings.length === 0 && (
             <p className='py-8 text-center text-muted-foreground'>
               这个视频里没有找到挥拍。
             </p>

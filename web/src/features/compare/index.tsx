@@ -1,28 +1,27 @@
 import { useRef, useState } from 'react'
-import { getRouteApi } from '@tanstack/react-router'
+import { Link, getRouteApi } from '@tanstack/react-router'
 import { Pause, Play, StepBack, StepForward } from 'lucide-react'
 import {
+  type Check,
   type Comparable,
-  type Compare as Comparison,
   clock,
+  lessonUrl,
+  thumbUrl,
   useCompare,
+  useDiagnosis,
   useLibrary,
 } from '@/lib/library'
+import { cn } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Slider } from '@/components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { Choice } from '@/components/choice'
 import { FramePlayer, type FramePlayerHandle } from '@/components/frame-player'
 import { IconButton } from '@/components/icon-button'
 import { Main } from '@/components/layout/main'
 
 const route = getRouteApi('/_app/compare')
-
-// rank of a swing that is no partner at all
-const FAR = 1e9
 
 const fromHit = (d: number) => {
   const s = Math.abs(d).toFixed(2)
@@ -38,76 +37,44 @@ export function Compare() {
   const mine = data?.swings.filter((s) => s.role === 'user') ?? []
   const coaches = data?.swings.filter((s) => s.role === 'coach') ?? []
   const pairs = data?.pairs ?? {}
-  const fits = (me?: string, coach?: string) =>
-    !!me && !!coach && pairs[me]?.includes(coach)
-
-  // Either side can lead. The one named in the URL without a partner gets
-  // the best partner filmed from its side.
-  // my swing for a coach demo: one it is the best match for, else any from its side
-  const partner = (coach?: string) =>
-    mine.find((s) => !!coach && pairs[s.id]?.[0] === coach) ??
-    mine.find((s) => fits(s.id, coach))
-  const coachAsked = coaches.find((s) => s.id === search.coach)
+  // Either side can lead. A coach demo named alone brings one of my swings
+  // filmed from the same place. Nothing named starts with one that has a partner.
   const me =
     mine.find((s) => s.id === search.swing) ??
-    partner(coachAsked?.id) ??
+    mine.find((s) => pairs[s.id]?.includes(search.coach ?? '')) ??
+    mine.find((s) => pairs[s.id]?.length) ??
     mine[0]
-  const coach =
-    coachAsked ?? coaches.find((s) => s.id === pairs[me?.id ?? '']?.[0])
-
-  const name = (s: Comparable) =>
-    [s.camera && vocab.camera[s.camera], s.name, clock(s.hit)]
-      .filter(Boolean)
-      .join(' · ')
-  // partners filmed from the same side first, best first; the others say so
-  const options = (list: Comparable[], rank: (s: Comparable) => number) =>
-    Object.fromEntries(
-      [...list]
-        .sort((a, b) => rank(a) - rank(b))
-        .map((s) => [s.id, rank(s) < FAR ? name(s) : `${name(s)}（不同侧）`])
-    )
-  const order = (i: number) => (i < 0 ? FAR : i)
-  const choose = (swing?: string, other?: string) =>
-    navigate({ search: { swing, coach: other } })
+  // the coach demos filmed from where I was filmed, best first
+  const partners = (pairs[me?.id ?? ''] ?? []).flatMap(
+    (id) => coaches.find((s) => s.id === id) ?? []
+  )
+  const coach = partners.find((s) => s.id === search.coach) ?? partners[0]
+  const cameras = [...new Set(mine.flatMap((s) => s.camera ?? []))]
 
   return (
-    <Main fluid className='flex flex-col gap-4 pt-2'>
+    <Main fluid className='flex flex-col gap-5 pt-2'>
       <div className='flex flex-wrap items-center justify-between gap-3'>
         <h1 className='text-2xl font-bold tracking-tight'>对比</h1>
-        {mine.length > 0 && (
-          <div className='flex flex-wrap items-center gap-2'>
-            <div className='w-72'>
-              <Choice
-                aria-label='选教练的一拍'
-                none='自动选教练'
-                value={coach?.id}
-                options={options(coaches, (s) =>
-                  order((pairs[me?.id ?? ''] ?? []).indexOf(s.id))
-                )}
-                onChange={(id) =>
-                  choose(
-                    // the coach leads: my swing follows to the one it suits best
-                    !id || pairs[me?.id ?? '']?.[0] === id
-                      ? me?.id
-                      : (partner(id)?.id ?? me?.id),
-                    id
-                  )
-                }
-              />
-            </div>
-            <div className='w-72'>
-              <Choice
-                aria-label='选我的一拍'
-                none='选我的一拍'
-                value={me?.id}
-                options={options(mine, (s) =>
-                  coach ? order((pairs[s.id] ?? []).indexOf(coach.id)) : 0
-                )}
-                // my swing leads: the coach follows to its best match
-                onChange={(id) => choose(id)}
-              />
-            </div>
-          </div>
+        {cameras.length > 1 && (
+          <ToggleGroup
+            type='single'
+            variant='outline'
+            size='sm'
+            aria-label='机位'
+            value={me?.camera ?? ''}
+            onValueChange={(v) =>
+              v &&
+              navigate({
+                search: { swing: mine.find((s) => s.camera === v)?.id },
+              })
+            }
+          >
+            {cameras.map((c) => (
+              <ToggleGroupItem key={c} value={c}>
+                {vocab.camera[c] ?? c}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
         )}
       </div>
       {isPending && <Skeleton className='h-[70svh]' />}
@@ -118,121 +85,312 @@ export function Compare() {
       )}
       {data && !me && (
         <p className='rounded-lg border border-dashed p-8 text-center text-muted-foreground'>
-          还没有可以对比的挥拍。先在审核里把我的一拍标为可用，并标好击球点。
+          还没有可以对比的挥拍。去
+          <Link to='/review' className='underline underline-offset-4'>
+            挥拍
+          </Link>
+          看看有没有被删掉的。
         </p>
       )}
-      {data && me && coach && !fits(me.id, coach.id) && (
-        <Alert>
-          <AlertDescription>
-            这两拍不是从同一侧拍的，姿态不能直接对照。
-          </AlertDescription>
-        </Alert>
-      )}
-      {data &&
-        me &&
-        coach &&
-        fits(me.id, coach.id) &&
-        coach.camera !== me.camera && (
-          <Alert>
-            <AlertDescription>
-              机位不完全相同：教练是
-              {vocab.camera[coach.camera ?? ''] ?? '未标'}，我是
-              {vocab.camera[me.camera ?? ''] ?? '未标'}。
-            </AlertDescription>
-          </Alert>
-        )}
       {data && me && (
-        <Tabs defaultValue='stills' key={`${coach?.id} ${me.id}`}>
-          <TabsList>
-            <TabsTrigger value='stills'>逐帧</TabsTrigger>
-            {coach && <TabsTrigger value='slow'>同步慢放</TabsTrigger>}
-          </TabsList>
-          <TabsContent value='stills'>
-            <Stills data={data} coach={coach} me={me} />
-          </TabsContent>
-          {coach && (
-            <TabsContent value='slow'>
-              <Slow span={data.span} coach={coach} me={me} />
+        <>
+          <div className='flex flex-col gap-1'>
+            <Strip
+              title='我'
+              swings={mine.filter((s) => s.camera === me.camera)}
+              value={me.id}
+              onPick={(swing) =>
+                navigate({ search: { swing, coach: coach?.id } })
+              }
+            />
+            {coach ? (
+              <Strip
+                title='教练'
+                swings={partners}
+                value={coach.id}
+                onPick={(id) =>
+                  navigate({ search: { swing: me.id, coach: id } })
+                }
+              />
+            ) : (
+              <p className='rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground'>
+                库里没有从{vocab.camera[me.camera ?? ''] ?? '这个机位'}
+                拍的教练示范，只能看我自己的这一拍。
+              </p>
+            )}
+          </div>
+          <Tabs defaultValue='stills' key={`${coach?.id} ${me.id}`}>
+            <TabsList>
+              <TabsTrigger value='stills'>逐帧</TabsTrigger>
+              {coach && <TabsTrigger value='slow'>同步慢放</TabsTrigger>}
+            </TabsList>
+            <TabsContent value='stills'>
+              <Stills offsets={data.offsets} coach={coach} me={me} />
             </TabsContent>
-          )}
-        </Tabs>
+            {coach && (
+              <TabsContent value='slow'>
+                <Slow span={data.span} coach={coach} me={me} />
+              </TabsContent>
+            )}
+          </Tabs>
+          {coach && <Diagnosis coach={coach} me={me} />}
+        </>
       )}
     </Main>
   )
 }
 
-function Who({ swing }: { swing: Comparable }) {
-  const { vocab } = useLibrary()
+/** One side's swings as small pictures. The picture is the name. */
+function Strip({
+  title,
+  swings,
+  value,
+  onPick,
+}: {
+  title: string
+  swings: Comparable[]
+  value: string
+  onPick: (id: string) => void
+}) {
   return (
-    <div className='flex min-w-0 flex-col items-start gap-1 text-sm'>
-      <Badge variant={swing.role === 'coach' ? 'default' : 'outline'}>
-        {vocab.role[swing.role]}
-        {swing.camera && ` · ${vocab.camera[swing.camera]}`}
-      </Badge>
-      <span className='w-full truncate text-muted-foreground'>
-        {swing.name}
-      </span>
+    <div className='flex items-center gap-3'>
+      <h2 className='w-8 shrink-0 text-sm font-medium'>{title}</h2>
+      <div
+        role='radiogroup'
+        aria-label={`选${title}的一拍`}
+        className='flex gap-4 overflow-x-auto p-1.5'
+      >
+        {[...new Set(swings.map((s) => s.name))].map((name) => (
+          <div key={name} className='flex shrink-0 flex-col gap-1.5'>
+            <span className='sticky left-0 w-fit text-xs text-muted-foreground'>
+              {name}
+            </span>
+            <div className='flex gap-2'>
+              {swings
+                .filter((s) => s.name === name)
+                .map((s) => (
+                  <button
+                    key={s.id}
+                    type='button'
+                    role='radio'
+                    aria-checked={s.id === value}
+                    aria-label={`${s.name} ${clock(s.hit)}`}
+                    title={`${s.name} ${clock(s.hit)}`}
+                    ref={(el) => {
+                      if (s.id === value)
+                        el?.scrollIntoView({
+                          block: 'nearest',
+                          inline: 'nearest',
+                        })
+                    }}
+                    onClick={() => onPick(s.id)}
+                    className={cn(
+                      'w-9 shrink-0 overflow-hidden rounded-md bg-muted ring-offset-2 ring-offset-background transition-opacity',
+                      s.id === value
+                        ? 'ring-2 ring-primary'
+                        : 'opacity-50 hover:opacity-100'
+                    )}
+                  >
+                    <img
+                      src={thumbUrl(s.id, s.hit)}
+                      alt=''
+                      loading='lazy'
+                      className='aspect-[1/2] w-full object-cover'
+                    />
+                  </button>
+                ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
 
+const side = (swing: Comparable) => (swing.role === 'coach' ? '教练' : '我')
+
 /** Both swings at the same moments before and after the hit. */
 function Stills({
-  data: { offsets },
+  offsets,
   coach,
   me,
 }: {
-  data: Comparison
+  offsets: number[]
   coach?: Comparable
   me: Comparable
 }) {
-  const row = (swing: Comparable) => (
-    <>
-      <Who swing={swing} />
-      {offsets.map((d) => (
-        <FramePlayer
-          key={d}
-          still
-          frame={9 / 16}
-          videoId={swing.video_id}
-          fps={swing.fps}
-          start={swing.hit + d}
-          maxHeight='calc(50svh - 9rem)'
-          box={swing.box}
-          format={(t) => fromHit(t - swing.hit)}
-        />
-      ))}
-    </>
-  )
   return (
-    // nine pictures need room: a narrow screen scrolls sideways
+    // seven pictures need room: a narrow screen scrolls sideways
     <div className='overflow-x-auto'>
       <div
-        className='grid min-w-3xl items-center gap-x-2 gap-y-3'
+        className='grid min-w-2xl items-center justify-items-center gap-x-2 gap-y-2'
         style={{
-          gridTemplateColumns: `6rem repeat(${offsets.length}, minmax(0, 1fr))`,
+          gridTemplateColumns: `2rem repeat(${offsets.length}, minmax(0, 1fr))`,
         }}
       >
         <span />
-        {offsets.map((d) =>
-          d === 0 ? (
-            <h2 key={d} className='text-center text-sm font-medium'>
-              击球点
-            </h2>
-          ) : (
-            <span key={d} />
-          )
+        {offsets.map((d) => (
+          <span
+            key={d}
+            className={cn(
+              'font-mono text-xs tabular-nums',
+              d === 0
+                ? 'font-sans font-medium text-foreground'
+                : 'text-muted-foreground'
+            )}
+          >
+            {d === 0 ? '击球' : fromHit(d)}
+          </span>
+        ))}
+        {[coach, me].map(
+          (swing) =>
+            swing && (
+              <div key={swing.id} className='contents'>
+                <h3 className='justify-self-start text-sm font-medium'>
+                  {side(swing)}
+                </h3>
+                {offsets.map((d) => (
+                  <FramePlayer
+                    key={d}
+                    still
+                    frame={9 / 16}
+                    videoId={swing.video_id}
+                    fps={swing.fps}
+                    start={swing.hit + d}
+                    maxHeight='17rem'
+                    box={swing.box}
+                  />
+                ))}
+              </div>
+            )
         )}
-        {coach ? (
-          row(coach)
-        ) : (
-          <p className='col-span-full rounded-lg border border-dashed p-8 text-center text-muted-foreground'>
-            库里没有同侧机位的教练示范，只显示我的这一拍。
-          </p>
-        )}
-        {row(me)}
       </div>
     </div>
+  )
+}
+
+/** What the coach does that I do not, each with the coach explaining it. */
+function Diagnosis({ coach, me }: { coach: Comparable; me: Comparable }) {
+  const { data, error, isPending } = useDiagnosis(me.id, coach.id)
+  const found = data?.checks?.filter((c) => c.short) ?? []
+  const close = data?.checks?.filter((c) => !c.short) ?? []
+  return (
+    <section className='flex flex-col gap-4 border-t pt-5'>
+      <h2 className='text-xl font-semibold tracking-tight'>差在哪</h2>
+      {isPending && <Skeleton className='h-48' />}
+      {error && (
+        <Alert variant='destructive'>
+          <AlertDescription>{error.message}</AlertDescription>
+        </Alert>
+      )}
+      {data && !data.checks && (
+        <p className='text-muted-foreground'>
+          这两拍里有一拍的姿态读不准，没法量。换一拍试试。
+        </p>
+      )}
+      {data?.checks && found.length === 0 && (
+        <p className='text-muted-foreground'>
+          量过的几项都和教练接近，这一拍没有找到明显的差别。
+        </p>
+      )}
+      {found.map((check) => (
+        <Finding key={check.key} check={check} coach={coach} me={me} />
+      ))}
+      {close.length > 0 && (
+        <p className='text-sm text-muted-foreground'>
+          和教练接近的：{close.map((c) => c.name).join('、')}。
+        </p>
+      )}
+    </section>
+  )
+}
+
+function Finding({
+  check,
+  coach,
+  me,
+}: {
+  check: Check
+  coach: Comparable
+  me: Comparable
+}) {
+  const [often, total] = check.habit
+  const most = Math.max(check.coach.value, check.me.value, 0.01)
+  return (
+    <article className='grid gap-6 rounded-lg border p-4 md:grid-cols-[auto_1fr]'>
+      <div className='flex justify-center gap-3'>
+        {([coach, me] as const).map((swing) => {
+          const shown = check[swing.role === 'coach' ? 'coach' : 'me']
+          return (
+            <figure key={swing.id} className='flex w-36 flex-col gap-1.5'>
+              <FramePlayer
+                still
+                frame={9 / 16}
+                videoId={swing.video_id}
+                fps={swing.fps}
+                start={swing.hit + shown.at}
+                maxHeight='16rem'
+                box={swing.box}
+                spot={shown.spot}
+              />
+              <figcaption className='flex items-center gap-2 text-sm'>
+                <span className='w-8 shrink-0 font-medium'>{side(swing)}</span>
+                <span className='h-1.5 flex-1 rounded-full bg-muted'>
+                  <span
+                    className={cn(
+                      'block h-full rounded-full',
+                      swing === coach ? 'bg-primary' : 'bg-yellow-500'
+                    )}
+                    style={{
+                      width: `${(Math.max(shown.value, 0) / most) * 100}%`,
+                    }}
+                  />
+                </span>
+              </figcaption>
+            </figure>
+          )
+        })}
+      </div>
+      <div className='flex min-w-0 flex-col gap-4'>
+        <div className='flex flex-col gap-1'>
+          <h3 className='text-lg font-semibold'>{check.fault}</h3>
+          <p className='text-sm text-muted-foreground'>
+            看圈出来的位置。{check.name}的幅度，我是教练的{' '}
+            {Math.round((Math.max(check.me.value, 0) / most) * 100)}%。
+            {total > 1 && `同一个视频的 ${total} 拍里，${often} 拍是这样。`}
+          </p>
+        </div>
+        {check.lessons.length > 0 && (
+          <div className='flex flex-col gap-3'>
+            <h4 className='text-sm font-medium'>教练怎么讲</h4>
+            <ul className='flex flex-col gap-4'>
+              {check.lessons.map((lesson) => (
+                <li
+                  key={`${lesson.video_id} ${lesson.t0}`}
+                  className='flex flex-col gap-3 sm:flex-row'
+                >
+                  <video
+                    src={lessonUrl(lesson)}
+                    controls
+                    playsInline
+                    preload='metadata'
+                    className='aspect-video w-full shrink-0 rounded-md bg-black sm:w-56'
+                  />
+                  <div className='flex flex-col gap-1'>
+                    <span className='text-xs text-muted-foreground'>
+                      {lesson.name} · {clock(lesson.t0).replace(/\.\d+$/, '')}
+                    </span>
+                    <p className='max-w-[60ch] text-sm leading-relaxed'>
+                      {lesson.text}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </article>
   )
 }
 
@@ -277,7 +435,9 @@ function Slow({
       <div className='grid grid-cols-2 justify-items-center gap-4'>
         {[coach, me].map((swing) => (
           <div key={swing.id} className='flex w-full flex-col gap-2'>
-            <Who swing={swing} />
+            <h3 className='text-sm font-medium'>
+              {swing === coach ? '教练' : '我'}
+            </h3>
             <div className='flex justify-center'>
               <FramePlayer
                 ref={swing === coach ? a : b}
@@ -286,9 +446,8 @@ function Slow({
                 videoId={swing.video_id}
                 fps={swing.fps}
                 start={swing.hit + from}
-                maxHeight='calc(100svh - 21rem)'
+                maxHeight='26rem'
                 box={swing.box}
-                format={(t) => fromHit(t - swing.hit)}
                 onFrame={
                   swing === me
                     ? (t) => {

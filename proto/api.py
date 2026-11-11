@@ -3,12 +3,13 @@ this machine.
 
   python3 api.py     http://127.0.0.1:8000   also serves the built frontend, once `pnpm build` has run in ../web
 """
+import json, subprocess
 from pathlib import Path
 from contextlib import closing
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-import compare, db, store
+import compare, db, diagnose, store
 
 app = FastAPI()
 app.mount("/store", StaticFiles(directory=store.ROOT), name="store")
@@ -24,26 +25,49 @@ def library():
         return db.library(c)
 
 @app.get("/api/videos/{video_id}/source")
-def source(video_id: str):
+def source(video_id: str, sound: bool = False):
     with closing(db.connect()) as c:
         v = c.execute("SELECT role, name, src FROM video WHERE id=?", (video_id,)).fetchone()
-    # the browser copy (clean.py play) when there is one: it plays everywhere and survives the source moving
-    for f in (v and store.ROOT / v["role"] / v["name"] / "play.mp4", v and store.src(v["src"])):
+    # the browser copy (clean.py play) when there is one: it plays everywhere and survives the source moving.
+    # It is silent, so a coach explaining plays from the source.
+    files = [v and store.ROOT / v["role"] / v["name"] / "play.mp4", v and store.src(v["src"])]
+    for f in files[::-1] if sound else files:
         if f and f.is_file():
             return FileResponse(f)
     raise HTTPException(404, "找不到源视频")
 
+def play_copy(s):
+    return store.ROOT / s["role"] / s["name"] / "play.mp4"
+
 @app.put("/api/swings/{swing_id}/label")
 def save_label(swing_id: str, body: dict):
-    # shortcut: db.swings drops nulls when merging layers, so the human layer cannot clear a phase a lower layer
-    # set; give the merge a real "cleared" value when a reviewer needs to remove one
+    """What a person says about a swing, field by field: a field left out keeps what they said before, null takes
+    it back. usable=false is how a swing is deleted."""
     with closing(db.connect()) as c:
         need_swing(c, swing_id)
+        old = c.execute("SELECT data FROM label WHERE swing_id=? AND source='human'", (swing_id,)).fetchone()
+        new = {k: v for k, v in {**json.loads(old["data"] if old else "{}"), **body}.items() if v is not None}
         try:
-            db.set_label(c, swing_id, "human", body)
+            db.set_label(c, swing_id, "human", new)
         except ValueError as e:
             raise HTTPException(400, str(e))
         c.commit()
+
+@app.get("/api/swings/{swing_id}/thumb")
+def thumb(swing_id: str):
+    """The player at the hit (the middle of the clip when there is none), as a small picture. Made once."""
+    with closing(db.connect()) as c:
+        s = next((s for s in db.swings(c) if s["id"] == swing_id), None)
+    if not s or not play_copy(s).is_file():
+        raise HTTPException(404, "没有这一拍的画面")
+    hit = s["label"].get("hit")
+    t = (s["t0"] + s["t1"]) / 2 if hit is None else hit
+    f = store.path(f"{s['role']}/{s['name']}/thumbs/{swing_id}-{round(t * 1000)}.jpg")
+    if not f.is_file():
+        x0, y0, x1, y1 = (s["box"] if hit is None else compare.view(s)) or (0, 0, 1, 1)
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{t:.3f}", "-i", play_copy(s), "-frames:v", "1", "-vf",
+                        f"crop=iw*{x1 - x0:.4f}:ih*{y1 - y0:.4f}:iw*{x0:.4f}:ih*{y0:.4f},scale=-2:320", f], check=True)
+    return FileResponse(f, headers={"Cache-Control": "max-age=86400"})
 
 @app.delete("/api/swings/{swing_id}/label")
 def revert_label(swing_id: str):
@@ -54,7 +78,7 @@ def revert_label(swing_id: str):
 
 @app.get("/api/compare")
 def comparable():
-    """Every swing that can be compared, and for each of mine the coach demos filmed from the same side, best first."""
+    """Every swing that can be compared, and for each of mine the coach demos filmed from the same place."""
     with closing(db.connect()) as c:
         lib = db.swings(c)
     pairs = compare.pairs(lib)
@@ -62,6 +86,15 @@ def comparable():
             "swings": [{**{k: s[k] for k in ("id", "role", "name", "video_id", "fps")}, "hit": s["label"]["hit"],
                         "camera": s["label"].get("camera"), "box": compare.view(s)}
                        for s in lib if s["id"] in pairs or s in compare.demos(lib)]}
+
+@app.get("/api/diagnose")
+def diagnosis(me: str, coach: str):
+    """Where my swing falls short of the coach's, with what the coach says about each."""
+    with closing(db.connect()) as c:
+        lib = {s["id"]: s for s in db.swings(c)}
+        if not all(i in lib and compare.ready(lib[i]) for i in (me, coach)):
+            raise HTTPException(404, "这两拍不能对比")
+        return {"checks": diagnose.diagnose(c, lib[me], lib[coach], [s for s in lib.values() if compare.ready(s)])}
 
 DIST = Path(__file__).resolve().parent.parent / "web/dist"
 

@@ -8,22 +8,15 @@ import {
 } from '@tanstack/react-query'
 
 // Every time is seconds of the source video. Enum values are English; their
-// display names, and the order of the phases, come from `vocab`.
+// display names come from `vocab`.
 const names = z.record(z.string(), z.string())
-const phase = z.enum(['backswing', 'racket_low', 'hit', 'follow'])
 
 const Label = z
   .object({
+    /** A real swing worth comparing. False is how a swing is deleted. */
     usable: z.boolean(),
-    face_visible: z.boolean(),
     camera: z.string(),
-    racket_side: z.string(),
-    confidence: z.string(),
-    backswing: z.number(),
-    racket_low: z.number(),
     hit: z.number(),
-    follow: z.number(),
-    note: z.string(),
     source: z.enum(['model', 'pose', 'claude', 'human']),
   })
   .partial()
@@ -58,24 +51,10 @@ const Video = z.object({
   swings: z.array(Swing),
 })
 
-const Library = z
-  .object({
-    vocab: z.object({
-      kind: names,
-      camera: names,
-      racket_side: names,
-      confidence: names,
-      role: names,
-      phase: names,
-      source: names,
-    }),
-    videos: z.array(Video),
-  })
-  .transform((lib) => ({
-    ...lib,
-    // the label fields that hold phase times, in the backend's order
-    phases: z.array(phase).parse(Object.keys(lib.vocab.phase)),
-  }))
+const Library = z.object({
+  vocab: z.object({ kind: names, camera: names, role: names, source: names }),
+  videos: z.array(Video),
+})
 
 const Comparable = z.object({
   id: z.string(),
@@ -93,10 +72,43 @@ const Compare = z.object({
   offsets: z.array(z.number()),
   /** Seconds from the hit that synced playback loops over. */
   span: z.tuple([z.number(), z.number()]),
-  /** For each of my swings, the coach demos filmed from the same side, best first. */
+  /** For each of my swings, the coach demos filmed from the same place, best first. */
   pairs: z.record(z.string(), z.array(z.string())),
   swings: z.array(Comparable),
 })
+
+const Shown = z.object({
+  /** Height difference between two joints, in torso lengths. */
+  value: z.number(),
+  /** Seconds from the hit of the moment that shows it. */
+  at: z.number(),
+  /** The joint to look at, as fractions of the picture. */
+  spot: z.tuple([z.number(), z.number()]),
+})
+
+const Lesson = z.object({
+  video_id: z.string(),
+  name: z.string(),
+  t0: z.number(),
+  t1: z.number(),
+  text: z.string(),
+})
+
+const Check = z.object({
+  key: z.string(),
+  name: z.string(),
+  fault: z.string(),
+  /** The coach is ahead by more than two good swings differ: a finding. */
+  short: z.boolean(),
+  me: Shown,
+  coach: Shown,
+  /** In how many of the swings from the same video the same thing shows. */
+  habit: z.tuple([z.number(), z.number()]),
+  lessons: z.array(Lesson),
+})
+
+/** Widest gap first. Null when either swing has no pose data. */
+const Diagnosis = z.object({ checks: z.array(Check).nullable() })
 
 export type Label = z.infer<typeof Label>
 export type Box = z.infer<typeof Box>
@@ -106,7 +118,10 @@ export type Video = z.infer<typeof Video>
 export type Library = z.infer<typeof Library>
 export type Comparable = z.infer<typeof Comparable>
 export type Compare = z.infer<typeof Compare>
-export type LabelDraft = Omit<Label, 'source'>
+export type Check = z.infer<typeof Check>
+export type Lesson = z.infer<typeof Lesson>
+/** What a person says about a swing. A field left out keeps its value, null takes it back. */
+export type LabelPatch = { usable?: boolean; camera?: string; hit?: number }
 
 async function api(path: string, init?: RequestInit) {
   const res = await fetch(path, init).catch(() => {
@@ -145,7 +160,7 @@ function useLabelMutation<T>(request: (arg: T) => Promise<unknown>) {
 }
 
 export const useSaveLabel = () =>
-  useLabelMutation(({ id, label }: { id: string; label: LabelDraft }) =>
+  useLabelMutation(({ id, label }: { id: string; label: LabelPatch }) =>
     api(`/api/swings/${id}/label`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -158,10 +173,26 @@ export const useDeleteLabel = () =>
     api(`/api/swings/${id}/label`, { method: 'DELETE' })
   )
 
+export const useDiagnosis = (me?: string, coach?: string) =>
+  useQuery({
+    queryKey: ['library', 'diagnose', me, coach],
+    enabled: !!me && !!coach,
+    queryFn: async () =>
+      Diagnosis.parse(await api(`/api/diagnose?me=${me}&coach=${coach}`)),
+  })
+
+/** The swing at its hit, cropped to the player. `hit` only keeps a moved hit from showing the old picture. */
+export const thumbUrl = (swingId: string, hit?: number) =>
+  `/api/swings/${swingId}/thumb?v=${hit ?? ''}`
+
 export const storeUrl = (key: string) =>
   '/store/' + key.split('/').map(encodeURIComponent).join('/')
 
 export const sourceUrl = (videoId: string) => `/api/videos/${videoId}/source`
+
+/** The coach talking, from t0 to t1. The picture-only copy has no sound. */
+export const lessonUrl = ({ video_id, t0, t1 }: Lesson) =>
+  `/api/videos/${video_id}/source?sound=1#t=${t0},${t1}`
 
 export function clock(t: number) {
   const m = Math.floor(t / 60)

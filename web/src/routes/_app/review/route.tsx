@@ -1,11 +1,10 @@
 import { z } from 'zod'
-import { createFileRoute } from '@tanstack/react-router'
-import { ReviewLayout } from '@/features/review'
+import { Outlet, createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/_app/review')({
   validateSearch: z.object({
-    video: z.string().optional(),
-    show: z.enum(['usable', 'todo']).optional(),
+    who: z.enum(['coach']).optional(),
+    deleted: z.boolean().optional(),
   }),
-  component: ReviewLayout,
+  component: Outlet,
 })

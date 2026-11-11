@@ -1,7 +1,6 @@
 import { useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { Loader2, Pause, Play, StepBack, StepForward } from 'lucide-react'
 import { type Box, clock, sourceUrl } from '@/lib/library'
-import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import {
@@ -32,8 +31,10 @@ type FramePlayerProps = {
   /** Scrub bar over this span, with a tick for each mark. */
   range?: [number, number]
   marks?: { t: number; name: string }[]
-  /** A cell in a grid of stills: step buttons appear over the picture. */
+  /** A bare picture, driven from outside: no controls under it. */
   still?: boolean
+  /** A ring around this point of the picture, as fractions of it. */
+  spot?: [number, number]
   /** Width over height every picture should share; the box is fitted inside it. */
   frame?: number
   format?: (t: number) => string
@@ -50,6 +51,7 @@ export function FramePlayer({
   range,
   marks = [],
   still,
+  spot,
   frame,
   format = clock,
   onFrame,
@@ -150,11 +152,11 @@ export function FramePlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onFrame, from, to])
 
-  const stepButton = (frames: number, className?: string) => (
+  const stepButton = (frames: number) => (
     <IconButton
       label={frames < 0 ? '上一帧' : '下一帧'}
-      variant={still ? 'secondary' : 'ghost'}
-      className={cn('size-7', className)}
+      variant='ghost'
+      className='size-7'
       onClick={() => step(frames)}
     >
       {frames < 0 ? <StepBack /> : <StepForward />}
@@ -167,7 +169,7 @@ export function FramePlayer({
       style={{ width: `min(100%, calc(${maxHeight} * ${ratio}))` }}
     >
       <div
-        className='group relative overflow-hidden rounded-lg bg-black'
+        className='relative overflow-hidden rounded-lg bg-black'
         style={{ aspectRatio: ratio }}
       >
         <video
@@ -199,11 +201,14 @@ export function FramePlayer({
               : '视频打不开。源文件可能被移走了，或者浏览器不支持它的编码。'}
           </p>
         )}
-        {still && state === 'ready' && (
-          <div className='absolute inset-x-1.5 bottom-1.5 flex justify-between opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100'>
-            {stepButton(-1)}
-            {stepButton(1)}
-          </div>
+        {spot && state === 'ready' && (
+          <span
+            className='absolute size-9 -translate-1/2 rounded-full border-2 border-yellow-300 shadow-[0_0_0_1px_rgb(0_0_0/0.5)]'
+            style={{
+              left: `${(0.5 + scale * (spot[0] - (x0 + x1) / 2)) * 100}%`,
+              top: `${(0.5 + tall * (spot[1] - (y0 + y1) / 2)) * 100}%`,
+            }}
+          />
         )}
       </div>
       {range && (
@@ -236,11 +241,7 @@ export function FramePlayer({
           />
         </div>
       )}
-      {still ? (
-        <span className='text-center font-mono text-sm tabular-nums'>
-          {format(time)}
-        </span>
-      ) : (
+      {!still && (
         <div className='flex items-center justify-center gap-1.5'>
           {stepButton(-1)}
           <IconButton
