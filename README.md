@@ -36,7 +36,9 @@ cd proto
 python3 clean.py prep "<视频>"     # 自己的视频加 --user
 python3 clean.py swings "<视频>"
 python3 clean.py fine "<视频>"
-python3 clean.py ingest "<视频>"
+python3 clean.py ingest "<视频>"   # 同时生成网页播放用的 play.mp4
+python3 clean.py play              # 给库里还没有 play.mp4 的视频补一份
+python3 clean.py relocate "<目录>" # 源视频挪了位置：按内容在目录下重新找到并更新路径
 python3 compare.py                 # 输出到 store/compare/
 ```
 
@@ -64,7 +66,9 @@ Vite 把 `/api` 和 `/store` 代理到 API，所以浏览器只访问 5173 端�
 - **挥拍审核**：逐帧看源视频，改可用、机位和阶段时间，保存到 `human` 层；撤销人工标签就回到下面的层。
 - **对比**：选你的一拍，教练在上、你在下，按阶段对齐，每行可以单独前后挪一帧。
 
-依赖：Node 20.19+、pnpm、`pip install fastapi uvicorn httpx`（httpx 只有自检用）。自检：`cd proto && python3 test_db.py && python3 test_api.py`，`cd web && pnpm build && pnpm lint`。
+网页播放的是 `store/<角色>/<视频名>/play.mp4`：H.264、半秒一个关键帧、索引在文件头，每一帧的时间与源视频完全一致（生成时逐帧校验）。它跟着 store 同步，所以源视频挪走或换一台机器，网页照常能看。没有这份文件时退回源视频。
+
+依赖：Node 20.19+、pnpm、`pip install fastapi uvicorn httpx`（httpx 只有自检用）。自检：`cd proto && python3 test_db.py && python3 test_api.py`，`cd web && pnpm test && pnpm build && pnpm lint`（`pnpm test` 用本机的 Chrome）。
 
 ## 约定
 

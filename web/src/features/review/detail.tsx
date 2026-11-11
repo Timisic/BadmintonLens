@@ -80,10 +80,16 @@ function Workspace({
     setDraft(effective())
   }
   const set = (patch: LabelDraft) => setDraft((d) => ({ ...d, ...patch }))
-  // asks the player, not our last render: a step may still be landing
-  const capture = async (key: (typeof lib.phases)[number]) => {
-    const t = await player.current?.shown()
-    if (t !== undefined) set({ [key]: Math.round(t * 1000) / 1000 })
+  // Asks the player, not our last render: a step may still be landing. A save
+  // waits for the captures since the last one, so none is left out of it.
+  const captured = useRef<Promise<LabelDraft>>(Promise.resolve({}))
+  const capture = (key: (typeof lib.phases)[number]) => {
+    const earlier = captured.current
+    const one = player.current!.shown().then((t) => ({
+      [key]: Math.round(t * 1000) / 1000,
+    }))
+    captured.current = one.then(async (o) => ({ ...(await earlier), ...o }))
+    one.then(set)
   }
   const go = (to?: Entry) =>
     to &&
@@ -92,10 +98,12 @@ function Workspace({
       params: { swingId: to.swing.id },
       search: true,
     })
-  const submit = () => {
+  const submit = async () => {
     revert.reset()
+    const label = { ...draft, ...(await captured.current) }
+    captured.current = Promise.resolve({})
     save.mutate(
-      { id: swing.id, label: draft },
+      { id: swing.id, label },
       { onSuccess: () => toast.success('已保存为人工标签') }
     )
   }
@@ -312,6 +320,7 @@ function Workspace({
               disabled={revert.isPending}
               onClick={() => {
                 save.reset()
+                captured.current = Promise.resolve({})
                 revert.mutate(swing.id, {
                   onSuccess: () => toast.success('已撤销人工标签'),
                 })

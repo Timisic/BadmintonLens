@@ -18,3 +18,5 @@ Proof: two rows of nine pictures with the whole player in frame, head to feet, t
 - The crop comes from `pose.npz` next to the video's swings. Without that file the cell shows the swing's looser box and the player looks small.
 - Only user swings that are usable and have backswing, racket low and hit can be compared. Others never appear in the picker.
 - No coach demo with a matching camera gives a dashed notice and my row alone.
+- Under about 800px the grid keeps its width and scrolls sideways.
+- A cell shows the frame that holds its time. Stepping a cell moves one real frame.

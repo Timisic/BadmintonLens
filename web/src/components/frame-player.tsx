@@ -72,11 +72,12 @@ export function FramePlayer({
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [rate, setRate] = useState(1)
 
-  // Half a frame past the time asked for: a seek to the exact start of a frame
-  // can land on the one before it.
-  const go = (t: number) => {
+  // A seek shows the frame that holds t. The millisecond is there because a
+  // seek to the exact start of a frame can land on the one before it. A step
+  // aims for the middle of its frame instead: frames are not evenly spaced.
+  const go = (t: number, pad = 0.001) => {
     want.current = t
-    video.current!.currentTime = Math.max(0, t + 0.5 / fps)
+    video.current!.currentTime = Math.max(0, t + pad)
   }
   const seek = (t: number) => {
     video.current!.pause()
@@ -89,7 +90,7 @@ export function FramePlayer({
     // from where we are heading when a seek is still under way, so held keys add up
     const from = v.seeking ? want.current : shown.current
     stepping.current = { from: shown.current, by: frames, tries: 0 }
-    go(from + frames / fps)
+    go(from + frames / fps, 0.5 / fps)
   }
   const toggle = () =>
     video.current!.paused ? video.current!.play() : video.current!.pause()
@@ -111,7 +112,6 @@ export function FramePlayer({
   // metadata loads, below.
   useEffect(() => {
     go(start)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [start])
 
   useEffect(() => {
@@ -129,7 +129,7 @@ export function FramePlayer({
       const s = stepping.current
       // A frame longer than 1/fps swallows a step. Push on until the picture changes.
       if (s.by && t === s.from && !v.seeking && s.tries++ < 4)
-        return go(want.current + Math.sign(s.by) / fps)
+        return go(want.current + Math.sign(s.by) / fps, 0.5 / fps)
       s.by = 0
       // play the swing on a loop
       if (!v.paused && t >= to) v.currentTime = from

@@ -70,27 +70,33 @@ function Aligned({ match }: { match: Match }) {
           <AlertDescription>{match.note}</AlertDescription>
         </Alert>
       )}
-      <div
-        className='grid items-center gap-x-2 gap-y-3'
-        style={{
-          gridTemplateColumns: `5rem repeat(${match.cols.length * 2 - 1}, minmax(0, 1fr))`,
-        }}
-      >
-        <span />
-        {match.cols.flatMap((name, i) => [
-          ...(i ? [<span key={`${name}-before`} />] : []),
-          <h2 key={name} className='text-center text-sm font-medium'>
-            {name}
-          </h2>,
-        ])}
-        {match.coach ? (
-          <Row side={match.coach} step={match.step} />
-        ) : (
-          <p className='col-span-full rounded-lg border border-dashed p-8 text-center text-muted-foreground'>
-            库里没有同侧机位的教练示范，只显示我的这一拍。
-          </p>
-        )}
-        <Row side={match.user} step={match.step} />
+      {/* nine pictures need room: a narrow screen scrolls sideways */}
+      <div className='overflow-x-auto'>
+        <div
+          className='grid min-w-3xl items-center gap-x-2 gap-y-3'
+          style={{
+            gridTemplateColumns: `5rem repeat(${match.cols.length * 2 - 1}, minmax(0, 1fr))`,
+          }}
+        >
+          <span />
+          {match.cols.flatMap((name, i) => [
+            ...(i ? [<span key={`${name}-before`} />] : []),
+            <h2
+              key={name}
+              className='text-center text-sm font-medium whitespace-nowrap'
+            >
+              {name}
+            </h2>,
+          ])}
+          {match.coach ? (
+            <Row side={match.coach} step={match.step} />
+          ) : (
+            <p className='col-span-full rounded-lg border border-dashed p-8 text-center text-muted-foreground'>
+              库里没有同侧机位的教练示范，只显示我的这一拍。
+            </p>
+          )}
+          <Row side={match.user} step={match.step} />
+        </div>
       </div>
     </>
   )

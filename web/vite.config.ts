@@ -34,7 +34,9 @@ export default defineConfig({
     unstubEnvs: true,
     browser: {
       enabled: true,
-      provider: playwright(),
+      // the Chrome already on this machine: nothing to download, and it is
+      // the browser the app is used in
+      provider: playwright({ launchOptions: { channel: 'chrome' } }),
       instances: [{ browser: 'chromium' }],
     },
     coverage: {

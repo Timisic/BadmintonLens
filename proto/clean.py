@@ -7,7 +7,9 @@ to re-run.
   python3 clean.py prep   <video> [--user]   transcript + shots + tiles + sheets       -> classify_task.md
   python3 clean.py swings <video>            segments, swing candidates, swing sheets   -> phase_task.md
   python3 clean.py fine   <video>            every-frame sheets around the hit          -> fine_task.md
-  python3 clean.py ingest <video>            validate the labels, write the library and preview clips
+  python3 clean.py ingest <video>            validate the labels, write the library, preview clips and browser copy
+  python3 clean.py play   [<video>]          browser copy only; with no video, every library video that lacks one
+  python3 clean.py relocate <dir>            sources moved: find them under <dir> by content and record the new paths
 
 Sheets number their tiles with small frame offsets (#0, #2, ...). Labels answer with those numbers and ingest turns
 them into seconds, so frame numbers stay inside the cache.
@@ -404,8 +406,49 @@ def to_label(sw, p, pts):
             p[k] = round(pts[max(0, min(len(pts) - 1, sw["first"] + p[k]))], 3)
     return p
 
+def play(video):
+    """Browser copy, store/<role>/<name>/play.mp4: H.264 that every browser decodes, a keyframe each half second so a
+    seek is quick, index first so it starts before the whole file arrives. Frame times are the source's, exactly:
+    labels are seconds of the source and must name the same frame in both files."""
+    d, meta = cache(video)
+    out = d / "play.mp4"
+    if not out.exists():
+        tb = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=time_base",
+                             "-of", "csv=p=0", video], capture_output=True, text=True, check=True).stdout
+        part = d / "play.part.mp4"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", video, "-an", "-c:v", "libx264", "-preset", "veryfast",
+                        "-crf", "23", "-g", str(round(meta["fps"] / 2)), "-pix_fmt", "yuv420p", "-fps_mode", "passthrough",
+                        "-enc_time_base", "demux", "-video_track_timescale", tb.strip().strip(",").split("/")[1],
+                        "-movflags", "+faststart", str(part)], check=True)
+        if frame_pts(part) != frame_pts(video):
+            part.unlink()
+            sys.exit(f"{video}: the browser copy's frame times differ from the source's")
+        part.replace(out)
+    return out
+
+def play_all():
+    with db.connect() as c:
+        rows = c.execute("SELECT name, src FROM video").fetchall()
+    for r in rows:
+        if store.src(r["src"]).is_file():
+            print(play(str(store.src(r["src"]))))
+        else:
+            print(f"{r['name']}: source not at {r['src']} (clean.py relocate <dir>)")
+
+def relocate(root):
+    """A video's id is a hash of its content, so a moved or renamed source is still recognisable."""
+    with db.connect() as c:
+        known = {r["id"]: r["name"] for r in c.execute("SELECT id, name FROM video")}
+        for p in sorted(Path(root).rglob("*")):
+            if p.suffix.lower() in (".mp4", ".mov", ".m4v") and p.is_file() and (vid := db.video_id(p)) in known:
+                c.execute("UPDATE video SET src=? WHERE id=?", (store.rel_src(p), vid))
+                print(f"{known.pop(vid)} -> {p}")
+    for name in known.values():
+        print(f"{name}: not found under {root}")
+
 def ingest(video, source="claude"):
     d, meta = cache(video)
+    play(video)
     vid, pts = meta["id"], frame_pts(video)
     segs, sws = load(d, "segments_draft.json"), load(d, "swings.json")
     ph = load(d, "phase_labels.json")
@@ -459,5 +502,7 @@ if __name__ == "__main__":
     args = [a for a in sys.argv[2:] if not a.startswith("--")]
     if sys.argv[1] == "prep":
         prep(args[0], "user" if "--user" in sys.argv else "coach")
+    elif sys.argv[1] == "play" and not args:
+        play_all()
     else:
-        {"swings": swings, "fine": fine, "ingest": ingest}[sys.argv[1]](args[0])
+        {"swings": swings, "fine": fine, "ingest": ingest, "play": play, "relocate": relocate}[sys.argv[1]](args[0])

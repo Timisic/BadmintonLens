@@ -107,7 +107,9 @@ export type Match = z.infer<typeof Match>
 export type LabelDraft = Omit<Label, 'source'>
 
 async function api(path: string, init?: RequestInit) {
-  const res = await fetch(path, init)
+  const res = await fetch(path, init).catch(() => {
+    throw new Error('连不上本机的 API')
+  })
   const body = await res.json().catch(() => null)
   if (!res.ok)
     throw new Error(

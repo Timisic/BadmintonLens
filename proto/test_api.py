@@ -38,6 +38,9 @@ part = http.get("/api/videos/vu/source", headers={"Range": "bytes=10-19"})
 assert part.status_code == 206 and part.content == bytes(range(10, 20)), part.status_code
 assert http.get("/api/videos/nope/source").status_code == 404
 assert http.get("/api/videos/gone/source").status_code == 404
+(root / "user/丢了").mkdir(parents=True)
+(root / "user/丢了/play.mp4").write_bytes(b"copy")  # the browser copy is served first, and outlives the source
+assert http.get("/api/videos/gone/source").content == b"copy"
 
 bad = http.put("/api/swings/u1/label", json={**ok, "camera": "背后"})
 assert bad.status_code == 400 and bad.json()["detail"].startswith("camera='背后', expected one of"), bad.text

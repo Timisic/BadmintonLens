@@ -26,10 +26,12 @@ def library():
 @app.get("/api/videos/{video_id}/source")
 def source(video_id: str):
     with closing(db.connect()) as c:
-        v = c.execute("SELECT src FROM video WHERE id=?", (video_id,)).fetchone()
-    if not v or not store.src(v["src"]).is_file():
-        raise HTTPException(404, "找不到源视频")
-    return FileResponse(store.src(v["src"]))
+        v = c.execute("SELECT role, name, src FROM video WHERE id=?", (video_id,)).fetchone()
+    # the browser copy (clean.py play) when there is one: it plays everywhere and survives the source moving
+    for f in (v and store.ROOT / v["role"] / v["name"] / "play.mp4", v and store.src(v["src"])):
+        if f and f.is_file():
+            return FileResponse(f)
+    raise HTTPException(404, "找不到源视频")
 
 @app.put("/api/swings/{swing_id}/label")
 def save_label(swing_id: str, body: dict):
