@@ -50,22 +50,22 @@ assert label("u1") == {**ok, "camera": "side", "note": "改", "source": "human"}
 assert http.delete("/api/swings/u1/label").status_code == 200
 assert label("u1") == {**ok, "source": "claude"}
 
-for call in (http.put("/api/swings/nope/label", json=ok), http.delete("/api/swings/nope/label"), http.get("/api/swings/nope/match")):
+for call in (http.put("/api/swings/nope/label", json=ok), http.delete("/api/swings/nope/label")):
     assert call.status_code == 404, call.text
 assert label("u1")["source"] == "claude"
 
-m = http.get("/api/swings/u1/match").json()
-assert m["cols"][2] == db.PHASE["hit"] and m["step"] == 3 and m["note"] == ""
-assert m["coach"]["swing"]["id"] == "c1" and m["user"]["swing"]["video_id"] == "vu"
-assert m["user"]["box"] == m["user"]["swing"]["box"]  # no pose file here: the swing's own box
-assert len(m["user"]["times"]) == 13 and [m["user"]["times"][i] for i in (0, 3, 6)] == [1.0, 1.4, 1.5]
-not_ready = http.get("/api/swings/u2/match")
-assert not_ready.status_code == 400 and db.PHASE["hit"] in not_ready.json()["detail"]
+m = http.get("/api/compare").json()
+assert m["offsets"][5] == 0 and m["pairs"] == {"u1": ["c1"]}  # u2 has no hit: not comparable
+assert [(s["id"], s["hit"], s["camera"]) for s in m["swings"]] == [("u1", 1.5, "back"), ("c1", 1.5, "back")]
+assert m["swings"][0]["box"] == [0, 0, 1, 1]  # no pose file here: the swing's own box
 
-# no coach demo filmed from the same side: the match still answers, with nothing to show above
+# no coach demo filmed from the same side: my swing is still listed, with nobody to pair
 http.put("/api/swings/u1/label", json={**ok, "racket_side": "left"})
-m = http.get("/api/swings/u1/match").json()
-assert m["coach"] is None and m["note"]
+m = http.get("/api/compare").json()
+assert m["pairs"] == {"u1": []} and len(m["swings"]) == 2
+# a hit is all a usable swing needs
+assert http.put("/api/swings/u2/label", json={"usable": True, "hit": 3.5}).status_code == 200
+assert http.put("/api/swings/u2/label", json={"usable": True}).status_code == 400
 assert http.get("/api/nope").status_code == 404
 assert "sqlite3" not in http.get("/..%2f..%2fproto/db.py").text  # the frontend route never serves a file outside dist
 print("ok")

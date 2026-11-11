@@ -108,7 +108,8 @@ function Workspace({
     )
   }
   const error = save.error ?? revert.error
-  const comparable = video.role === 'user' && swing.label.usable
+  const comparable =
+    !!swing.label.usable && swing.label.hit !== undefined && video.role
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -149,7 +150,14 @@ function Workspace({
           <span className='ms-auto flex gap-1.5'>
             {comparable && (
               <Button variant='outline' size='sm' asChild>
-                <Link to='/compare' search={{ swing: swing.id }}>
+                <Link
+                  to='/compare'
+                  search={
+                    comparable === 'user'
+                      ? { swing: swing.id }
+                      : { coach: swing.id }
+                  }
+                >
                   <Columns2 /> 对比
                 </Link>
               </Button>

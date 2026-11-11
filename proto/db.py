@@ -18,8 +18,8 @@ CONFIDENCE = {"high": "高", "medium": "中", "low": "低"}
 PHASE = {"backswing": "引拍侧身", "racket_low": "拍头最低点", "hit": "击球点", "follow": "随挥收拍"}
 ROLE = {"coach": "教练", "user": "我"}
 DEMO = {"demo", "wrong_demo"}
-# label layers, later wins: legacy vision model, pose estimation (reserved for the GPU job), Claude subagent, person
-SOURCE = {"model": "旧模型", "pose": "姿态", "claude": "Claude", "human": "人工"}
+# label layers, later wins: legacy vision model, Claude subagent, pose estimation (compare.py refine: the hit), person
+SOURCE = {"model": "旧模型", "claude": "Claude", "pose": "姿态", "human": "人工"}
 SOURCES = list(SOURCE)
 
 SCHEMA = """
@@ -62,8 +62,8 @@ def check_label(d):
     seq = [d[k] for k in PHASE if d.get(k) is not None]
     if seq != sorted(seq):
         raise ValueError(f"phases out of order: {({k: d.get(k) for k in PHASE})}")
-    if d.get("usable") and any(d.get(k) is None for k in ("backswing", "racket_low", "hit")):
-        raise ValueError("usable swing needs backswing, racket_low and hit")
+    if d.get("usable") and d.get("hit") is None:
+        raise ValueError("usable swing needs hit")
     return d
 
 def set_label(c, swing_id, source, data):

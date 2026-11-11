@@ -15,6 +15,8 @@ export type FramePlayerHandle = {
   seek: (t: number) => void
   step: (frames: number) => void
   toggle: () => void
+  play: (rate: number) => void
+  pause: () => void
   /** Time of the frame on screen, once any seek under way has landed. */
   shown: () => Promise<number>
 }
@@ -98,6 +100,11 @@ export function FramePlayer({
     seek,
     step,
     toggle,
+    play: (rate) => {
+      video.current!.playbackRate = rate
+      video.current!.play()
+    },
+    pause: () => video.current!.pause(),
     shown: () =>
       video.current!.seeking
         ? new Promise((done) => {

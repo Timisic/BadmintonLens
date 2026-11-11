@@ -9,7 +9,7 @@ proto/
   clean.py     清洗管线：prep → swings → fine → ingest
   db.py        SQLite 素材库和全部词表
   store.py     派生文件位置，与服务器同步
-  compare.py   生成对比图
+  compare.py   对比的配对规则、击球点校正、教练示范精选
   pose.py      GPU 姿态关键点（在服务器上跑）
   asr.py       没有 SRT 时的语音转写
   api.py       本机 HTTP API，前端读写素材库都走它
@@ -39,7 +39,8 @@ python3 clean.py fine "<视频>"
 python3 clean.py ingest "<视频>"   # 同时生成网页播放用的 play.mp4
 python3 clean.py play              # 给库里还没有 play.mp4 的视频补一份
 python3 clean.py relocate "<目录>" # 源视频挪了位置：按内容在目录下重新找到并更新路径
-python3 compare.py                 # 输出到 store/compare/
+python3 compare.py refine          # 有 pose.npz 之后：用持拍手腕最高点校正每一拍的击球时间（pose 层）
+python3 compare.py standard        # 教练每个机位只留最好的一拍示范，其余教练挥拍删掉；片段和字幕保留
 ```
 
 姿态关键点：
@@ -64,7 +65,7 @@ Vite 把 `/api` 和 `/store` 代理到 API，所以浏览器只访问 5173 端�
 
 - **素材库**：视频表格，点进去看片段和挥拍。
 - **挥拍审核**：逐帧看源视频，改可用、机位和阶段时间，保存到 `human` 层；撤销人工标签就回到下面的层。
-- **对比**：选你的一拍，教练在上、你在下，按阶段对齐，每行可以单独前后挪一帧。
+- **对比**：教练和我各选一拍，选一边时另一边自动跟到同机位的最佳搭档。「逐帧」是离击球点相同时刻的九帧，「同步慢放」是两边在同一个时钟上循环播放，可选 0.5×、0.25×、0.1×。
 
 网页播放的是 `store/<角色>/<视频名>/play.mp4`：H.264、半秒一个关键帧、索引在文件头，每一帧的时间与源视频完全一致（生成时逐帧校验）。它跟着 store 同步，所以源视频挪走或换一台机器，网页照常能看。没有这份文件时退回源视频。
 
@@ -74,7 +75,8 @@ Vite 把 `/api` 和 `/store` 代理到 API，所以浏览器只访问 5173 端�
 
 - 时间一律是源视频里的秒，字段和枚举一律英文，中文显示名只在 `db.py`。
 - 库里的 id 由内容哈希和时间组成，重跑不变；目录和文件名用视频名和时间，方便人看。
-- 标签分层，后者覆盖前者：`model` < `pose` < `claude` < `human`。
+- 标签分层，后者覆盖前者：`model` < `claude` < `pose` < `human`。`pose` 层只管击球时间。
+- 对比只以击球点为锚：上下两行取离击球点相同的时刻，所以一拍只要标为可用并有击球点就能对比。
 - 环境变量：`LENS_STORE` 存储根目录，`LENS_REMOTE` 同步目标，`LENS_VIDEOS` 源视频根目录，`LENS_FONT` 中文字体。
 - 依赖：Python 3.10+、ffmpeg、rsync、`pip install pillow numpy`。
 

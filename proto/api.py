@@ -52,20 +52,16 @@ def revert_label(swing_id: str):
         c.execute("DELETE FROM label WHERE swing_id=? AND source='human'", (swing_id,))
         c.commit()
 
-@app.get("/api/swings/{swing_id}/match")
-def match(swing_id: str):
+@app.get("/api/compare")
+def comparable():
+    """Every swing that can be compared, and for each of mine the coach demos filmed from the same side, best first."""
     with closing(db.connect()) as c:
         lib = db.swings(c)
-    user = next((s for s in lib if s["id"] == swing_id), None)
-    if not user:
-        raise HTTPException(404, f"没有这一拍：{swing_id}")
-    if not compare.ready(user):
-        need = "、".join(db.PHASE[k] for k in ("backswing", "racket_low", "hit"))
-        raise HTTPException(400, f"这一拍还不能对比：要先标为可用，并标好{need}")
-    coach, note = compare.pick(user, compare.demos(lib))
-    side = lambda s: {"swing": s, "times": compare.times(s["label"]), "box": compare.view(s)}
-    return {"cols": compare.COLS, "step": compare.N + 1, "note": note, "user": side(user),
-            "coach": coach and side(coach)}
+    pairs = compare.pairs(lib)
+    return {"offsets": compare.OFFSETS, "span": compare.SPAN, "pairs": pairs,
+            "swings": [{**{k: s[k] for k in ("id", "role", "name", "video_id", "fps")}, "hit": s["label"]["hit"],
+                        "camera": s["label"].get("camera"), "box": compare.view(s)}
+                       for s in lib if s["id"] in pairs or s in compare.demos(lib)]}
 
 DIST = Path(__file__).resolve().parent.parent / "web/dist"
 

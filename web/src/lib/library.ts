@@ -77,24 +77,25 @@ const Library = z
     phases: z.array(phase).parse(Object.keys(lib.vocab.phase)),
   }))
 
-const Side = z.object({
-  swing: Swing.extend({
-    video_id: z.string(),
-    role: Video.shape.role,
-    name: z.string(),
-    fps: z.number(),
-    label: Label.required({ hit: true }),
-  }),
-  times: z.array(z.number()),
+const Comparable = z.object({
+  id: z.string(),
+  role: Video.shape.role,
+  name: z.string(),
+  video_id: z.string(),
+  fps: z.number(),
+  hit: z.number(),
+  camera: z.string().nullable(),
   box: Box.nullable(),
 })
 
-const Match = z.object({
-  cols: z.array(z.string()),
-  step: z.number(),
-  note: z.string(),
-  user: Side,
-  coach: Side.nullable(),
+const Compare = z.object({
+  /** Seconds from the hit of each still, the same for both rows. */
+  offsets: z.array(z.number()),
+  /** Seconds from the hit that synced playback loops over. */
+  span: z.tuple([z.number(), z.number()]),
+  /** For each of my swings, the coach demos filmed from the same side, best first. */
+  pairs: z.record(z.string(), z.array(z.string())),
+  swings: z.array(Comparable),
 })
 
 export type Label = z.infer<typeof Label>
@@ -103,7 +104,8 @@ export type Swing = z.infer<typeof Swing>
 export type Segment = z.infer<typeof Segment>
 export type Video = z.infer<typeof Video>
 export type Library = z.infer<typeof Library>
-export type Match = z.infer<typeof Match>
+export type Comparable = z.infer<typeof Comparable>
+export type Compare = z.infer<typeof Compare>
 export type LabelDraft = Omit<Label, 'source'>
 
 async function api(path: string, init?: RequestInit) {
@@ -127,12 +129,11 @@ export const libraryQuery = queryOptions({
 
 export const useLibrary = () => useSuspenseQuery(libraryQuery).data
 
-export const useMatch = (swingId: string | undefined) =>
+export const useCompare = () =>
   useQuery({
-    // under the library key, so a label change refetches the match too
-    queryKey: ['library', 'match', swingId],
-    queryFn: async () => Match.parse(await api(`/api/swings/${swingId}/match`)),
-    enabled: !!swingId,
+    // under the library key, so a label change refetches it too
+    queryKey: ['library', 'compare'],
+    queryFn: async () => Compare.parse(await api('/api/compare')),
   })
 
 function useLabelMutation<T>(request: (arg: T) => Promise<unknown>) {

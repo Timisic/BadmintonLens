@@ -3,7 +3,7 @@ import clean, db
 
 ok = {"usable": True, "camera": "back", "face_visible": False, "racket_side": "right", "backswing": 1.0, "racket_low": 1.4, "hit": 1.5}
 assert db.check_label(ok) == ok
-for bad in ({**ok, "camera": "背后"}, {**ok, "hit": 1.2}, {**ok, "racket_low": None}, {**ok, "击球点": 1.5}):
+for bad in ({**ok, "camera": "背后"}, {**ok, "hit": 1.2}, {**ok, "hit": None}, {**ok, "击球点": 1.5}):
     try:
         db.check_label(bad)
     except ValueError:
@@ -14,4 +14,15 @@ for bad in ({**ok, "camera": "背后"}, {**ok, "hit": 1.2}, {**ok, "racket_low":
 sw, pts = {"first": 10}, [i / 30 for i in range(100)]
 assert clean.to_label(sw, {"usable": True, "hit": 5}, pts) == {"usable": True, "hit": 0.5}
 assert clean.to_label(sw, {"usable": True, "racket_height": ["below_waist", "shoulder_to_head", "above_head", "above_head"]}, pts)["usable"] is False
+
+# the hit is where the faster wrist is highest, whatever the label said
+import numpy as np, compare
+t = np.arange(0, 2, 1 / 30)
+k = np.zeros((len(t), 17, 3))
+k[:, [5, 6], 1], k[:, [11, 12], 1] = 0.4, 0.6
+k[:, 10, 1] = 0.5 - 0.3 * np.exp(-((t - 1.1) / 0.08) ** 2)
+compare.player = lambda s, a, b: (t[(t >= a) & (t <= b)], k[(t >= a) & (t <= b)], None)
+assert abs(compare.wrist({"label": {"hit": 1.0}})[0] - 1.1) < 0.02
+k[:, 10, 1] = 0.5
+assert compare.wrist({"label": {"hit": 1.0}}) is None  # a still hand is not a hit
 print("ok")
