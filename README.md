@@ -1,6 +1,6 @@
 # BadmintonLens
 
-把你的杀球和同机位的教练示范逐阶段并排对比。设计见 `DESIGN.md`。
+把你的杀球和同机位的教练示范逐阶段并排对比。设计见 `DESIGN.md`，前端交接见 `HANDOFF.md`。
 
 ## 结构
 
