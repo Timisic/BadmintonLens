@@ -11,6 +11,9 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteRouteImport } from './routes/_app/route'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppReviewRouteRouteImport } from './routes/_app/review/route'
+import { Route as AppReviewIndexRouteImport } from './routes/_app/review/index'
+import { Route as AppReviewSwingIdRouteImport } from './routes/_app/review/$swingId'
 
 const AppRouteRoute = AppRouteRouteImport.update({
   id: '/_app',
@@ -21,24 +24,53 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppReviewRouteRoute = AppReviewRouteRouteImport.update({
+  id: '/review',
+  path: '/review',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppReviewIndexRoute = AppReviewIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppReviewRouteRoute,
+} as any)
+const AppReviewSwingIdRoute = AppReviewSwingIdRouteImport.update({
+  id: '/$swingId',
+  path: '/$swingId',
+  getParentRoute: () => AppReviewRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
+  '/review': typeof AppReviewRouteRouteWithChildren
+  '/review/$swingId': typeof AppReviewSwingIdRoute
+  '/review/': typeof AppReviewIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
+  '/review/$swingId': typeof AppReviewSwingIdRoute
+  '/review': typeof AppReviewIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteRouteWithChildren
+  '/_app/review': typeof AppReviewRouteRouteWithChildren
   '/_app/': typeof AppIndexRoute
+  '/_app/review/$swingId': typeof AppReviewSwingIdRoute
+  '/_app/review/': typeof AppReviewIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/review' | '/review/$swingId' | '/review/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/_app' | '/_app/'
+  to: '/' | '/review/$swingId' | '/review'
+  id:
+    | '__root__'
+    | '/_app'
+    | '/_app/review'
+    | '/_app/'
+    | '/_app/review/$swingId'
+    | '/_app/review/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -61,14 +93,51 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/_app/review': {
+      id: '/_app/review'
+      path: '/review'
+      fullPath: '/review'
+      preLoaderRoute: typeof AppReviewRouteRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/review/': {
+      id: '/_app/review/'
+      path: '/'
+      fullPath: '/review/'
+      preLoaderRoute: typeof AppReviewIndexRouteImport
+      parentRoute: typeof AppReviewRouteRoute
+    }
+    '/_app/review/$swingId': {
+      id: '/_app/review/$swingId'
+      path: '/$swingId'
+      fullPath: '/review/$swingId'
+      preLoaderRoute: typeof AppReviewSwingIdRouteImport
+      parentRoute: typeof AppReviewRouteRoute
+    }
   }
 }
 
+interface AppReviewRouteRouteChildren {
+  AppReviewSwingIdRoute: typeof AppReviewSwingIdRoute
+  AppReviewIndexRoute: typeof AppReviewIndexRoute
+}
+
+const AppReviewRouteRouteChildren: AppReviewRouteRouteChildren = {
+  AppReviewSwingIdRoute: AppReviewSwingIdRoute,
+  AppReviewIndexRoute: AppReviewIndexRoute,
+}
+
+const AppReviewRouteRouteWithChildren = AppReviewRouteRoute._addFileChildren(
+  AppReviewRouteRouteChildren,
+)
+
 interface AppRouteRouteChildren {
+  AppReviewRouteRoute: typeof AppReviewRouteRouteWithChildren
   AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
+  AppReviewRouteRoute: AppReviewRouteRouteWithChildren,
   AppIndexRoute: AppIndexRoute,
 }
 
