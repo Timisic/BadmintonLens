@@ -1,12 +1,9 @@
 import { getRouteApi } from '@tanstack/react-router'
-import { type Label, type Swing, type Video, useLibrary } from '@/lib/library'
+import { type Swing, type Video, useLibrary } from '@/lib/library'
 
 const route = getRouteApi('/_app/review')
 
 export type Entry = { video: Video; swing: Swing }
-
-const usableState = (label: Label) =>
-  label.usable === undefined ? 'unset' : label.usable ? 'yes' : 'no'
 
 /** Every swing in library order, and whether one passes the filters in the URL. */
 export function useReviewList() {
@@ -17,7 +14,7 @@ export function useReviewList() {
   )
   const matches = ({ video, swing }: Entry) =>
     (!search.video || video.id === search.video) &&
-    (!search.usable || usableState(swing.label) === search.usable) &&
-    (!search.source || (swing.label.source ?? 'none') === search.source)
+    (search.show !== 'usable' || !!swing.label.usable) &&
+    (search.show !== 'todo' || swing.label.source !== 'human')
   return { all, matches }
 }

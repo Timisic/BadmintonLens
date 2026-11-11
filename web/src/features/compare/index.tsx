@@ -1,19 +1,18 @@
-import { useRef, useState } from 'react'
 import { getRouteApi } from '@tanstack/react-router'
 import { type Match, clock, useLibrary, useMatch } from '@/lib/library'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Choice } from '@/components/choice'
-import { FramePlayer, type FramePlayerHandle } from '@/components/frame-player'
+import { FramePlayer } from '@/components/frame-player'
 import { Main } from '@/components/layout/main'
 
 const route = getRouteApi('/_app/compare')
 
 export function Compare() {
-  const { swing } = route.useSearch()
+  const search = route.useSearch()
   const navigate = route.useNavigate()
   const { videos } = useLibrary()
-  const match = useMatch(swing)
 
   // the same rule as compare.ready in the backend, which answers 400 otherwise
   const ready = videos
@@ -28,29 +27,31 @@ export function Compare() {
           : []
       )
     )
+  const swing = search.swing ?? ready[0]?.[0]
+  const match = useMatch(swing)
 
   return (
-    <Main fluid className='flex flex-col gap-4'>
-      <div className='flex flex-wrap items-center gap-3'>
+    <Main fluid className='flex flex-col gap-4 pt-2'>
+      <div className='flex flex-wrap items-center justify-between gap-3'>
         <h1 className='text-2xl font-bold tracking-tight'>对比</h1>
-        <div className='w-80'>
-          <Choice
-            aria-label='选择我的一拍'
-            none='选我的一拍'
-            value={swing}
-            options={Object.fromEntries(ready)}
-            onChange={(id) => navigate({ search: { swing: id } })}
-          />
-        </div>
+        {ready.length > 0 && (
+          <div className='w-72'>
+            <Choice
+              aria-label='选择我的一拍'
+              none='选我的一拍'
+              value={swing}
+              options={Object.fromEntries(ready)}
+              onChange={(id) => navigate({ search: { swing: id } })}
+            />
+          </div>
+        )}
       </div>
       {ready.length === 0 && (
-        <p className='text-muted-foreground'>
-          还没有可以对比的挥拍。先在挥拍审核里把你的一拍标为可用，并标好阶段时间。
+        <p className='rounded-lg border border-dashed p-8 text-center text-muted-foreground'>
+          还没有可以对比的挥拍。先在审核里把我的一拍标为可用，并标好引拍、最低点和击球点。
         </p>
       )}
-      {match.isPending && swing && (
-        <p className='text-muted-foreground'>正在找匹配的教练示范…</p>
-      )}
+      {match.isPending && swing && <Skeleton className='h-[70svh]' />}
       {match.error && (
         <Alert variant='destructive'>
           <AlertDescription>{match.error.message}</AlertDescription>
@@ -62,17 +63,6 @@ export function Compare() {
 }
 
 function Aligned({ match }: { match: Match }) {
-  const [at, setAt] = useState(0)
-  const coach = useRef<FramePlayerHandle>(null)
-  const user = useRef<FramePlayerHandle>(null)
-  const last = match.user.times.length - 1
-
-  const go = (i: number) => {
-    setAt(i)
-    coach.current?.seek(match.coach?.times[i] ?? 0)
-    user.current?.seek(match.user.times[i])
-  }
-
   return (
     <>
       {match.note && (
@@ -80,78 +70,69 @@ function Aligned({ match }: { match: Match }) {
           <AlertDescription>{match.note}</AlertDescription>
         </Alert>
       )}
-      <div className='flex flex-wrap items-center gap-2'>
-        <Button
-          variant='outline'
-          size='sm'
-          disabled={at === 0}
-          onClick={() => go(at - 1)}
-        >
-          上一格
-        </Button>
-        {match.cols.map((name, k) => (
-          <Button
-            key={name}
-            size='sm'
-            variant={at === k * match.step ? 'default' : 'outline'}
-            onClick={() => go(k * match.step)}
-          >
+      <div
+        className='grid items-center gap-x-4 gap-y-3'
+        style={{
+          gridTemplateColumns: `5rem repeat(${match.cols.length}, minmax(0, 1fr))`,
+        }}
+      >
+        <span />
+        {match.cols.map((name) => (
+          <h2 key={name} className='text-sm font-medium'>
             {name}
-          </Button>
+          </h2>
         ))}
-        <Button
-          variant='outline'
-          size='sm'
-          disabled={at === last}
-          onClick={() => go(at + 1)}
-        >
-          下一格
-        </Button>
-        <span className='text-sm text-muted-foreground tabular-nums'>
-          第 {at + 1} / {last + 1} 格，两行各自跳到自己对齐的时间
-        </span>
+        {match.coach ? (
+          <Row side={match.coach} step={match.step} />
+        ) : (
+          <p className='col-span-full rounded-lg border border-dashed p-8 text-center text-muted-foreground'>
+            库里没有同侧机位的教练示范，只显示我的这一拍。
+          </p>
+        )}
+        <Row side={match.user} step={match.step} />
       </div>
-      {match.coach ? (
-        <Row ref={coach} side={match.coach} />
-      ) : (
-        <div className='rounded-md border border-dashed p-8 text-center text-muted-foreground'>
-          没有可以放在上面的教练示范。下面只显示你的这一拍。
-        </div>
-      )}
-      <Row ref={user} side={match.user} />
     </>
   )
 }
 
 function Row({
-  ref,
   side: { swing, times },
+  step,
 }: {
-  ref: React.Ref<FramePlayerHandle>
   side: Match['user']
+  step: number
 }) {
   const { vocab } = useLibrary()
-  const [time, setTime] = useState(times[0])
-  const offset = time - swing.label.hit
-
+  const fromHit = (t: number) => {
+    const d = t - swing.label.hit
+    const s = Math.abs(d).toFixed(2)
+    return `${+s === 0 ? '' : d < 0 ? '−' : '+'}${s}s`
+  }
   return (
-    <section className='flex flex-col gap-2'>
-      <h2 className='flex items-baseline gap-3 font-semibold'>
-        {vocab.role[swing.role]} · {swing.name}
-        <span className='font-mono text-sm font-normal tabular-nums'>
-          距击球 {offset < 0 ? '-' : '+'}
-          {Math.abs(offset).toFixed(2)}s
+    <>
+      <div className='flex flex-col items-start gap-1 text-sm'>
+        <Badge variant={swing.role === 'coach' ? 'default' : 'outline'}>
+          {vocab.role[swing.role]}
+        </Badge>
+        <span className='w-full truncate text-muted-foreground'>
+          {swing.name}
         </span>
-      </h2>
-      <FramePlayer
-        ref={ref}
-        videoId={swing.video_id}
-        fps={swing.fps}
-        start={times[0]}
-        box={swing.box}
-        onFrame={setTime}
-        className='h-[34vh]'
-      />
-    </section>
+      </div>
+      {times
+        .filter((_, i) => i % step === 0)
+        .map((t) => (
+          <FramePlayer
+            key={t}
+            still
+            frame={4 / 5}
+            videoId={swing.video_id}
+            fps={swing.fps}
+            start={t}
+            maxHeight='calc(50svh - 8rem)'
+            box={swing.box}
+            format={fromHit}
+          />
+        ))}
+    </>
   )
 }

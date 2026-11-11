@@ -9,6 +9,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table'
 import { type Video, clock, useLibrary } from '@/lib/library'
+import { Badge } from '@/components/ui/badge'
 import {
   Table,
   TableBody,
@@ -22,46 +23,63 @@ import { Main } from '@/components/layout/main'
 
 const col = createColumnHelper<Video>()
 
+const count = (v: Video) => ({
+  usable: v.swings.filter((s) => s.label.usable).length,
+  reviewed: v.swings.filter((s) => s.label.source === 'human').length,
+})
+
 export function VideoTable() {
   const { vocab, videos } = useLibrary()
   const [sorting, setSorting] = useState<SortingState>([])
 
   const columns = [
-    col.accessor((v) => vocab.role[v.role], { id: 'role', header: '角色' }),
     col.accessor('name', {
-      header: '名称',
+      header: '视频',
       cell: ({ row }) => (
         <Link
           to='/videos/$id'
           params={{ id: row.original.id }}
-          className='font-medium underline-offset-4 hover:underline'
+          className='font-medium after:absolute after:inset-0'
         >
           {row.original.name}
         </Link>
       ),
     }),
-    col.accessor('duration', {
-      header: '时长',
-      cell: ({ getValue }) => clock(getValue()),
-    }),
-    col.accessor('fps', {
-      header: '帧率',
-      cell: ({ getValue }) => +getValue().toFixed(2),
+    col.accessor((v) => vocab.role[v.role], {
+      id: 'role',
+      header: '角色',
+      cell: ({ row, getValue }) => (
+        <Badge variant={row.original.role === 'coach' ? 'default' : 'outline'}>
+          {getValue()}
+        </Badge>
+      ),
     }),
     col.accessor(
       (v) =>
         [...new Set(v.swings.flatMap((s) => s.label.camera ?? []))]
           .map((camera) => vocab.camera[camera] ?? camera)
-          .join('、'),
+          .join(' · '),
       { id: 'cameras', header: '机位' }
     ),
-    col.accessor((v) => v.swings.length, { id: 'swings', header: '拍数' }),
-    col.accessor((v) => v.swings.filter((s) => s.label.usable).length, {
-      id: 'usable',
-      header: '可用',
+    col.accessor('duration', {
+      header: '时长',
+      cell: ({ getValue }) => clock(getValue()).replace(/\.\d+$/, ''),
     }),
+    col.accessor((v) => count(v).usable, {
+      id: 'usable',
+      header: '可用 / 拍数',
+      cell: ({ row, getValue }) => (
+        <>
+          {getValue()}
+          <span className='text-muted-foreground'>
+            {' '}
+            / {row.original.swings.length}
+          </span>
+        </>
+      ),
+    }),
+    col.accessor((v) => count(v).reviewed, { id: 'reviewed', header: '已审' }),
   ]
-
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: videos,
@@ -73,9 +91,9 @@ export function VideoTable() {
   })
 
   return (
-    <Main>
-      <h1 className='mb-4 text-2xl font-bold tracking-tight'>素材库</h1>
-      <div className='overflow-hidden rounded-md border'>
+    <Main fluid className='flex flex-col gap-4 pt-2'>
+      <h1 className='text-2xl font-bold tracking-tight'>素材库</h1>
+      <div className='overflow-hidden rounded-lg border'>
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((group) => (
@@ -93,9 +111,9 @@ export function VideoTable() {
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id}>
+              <TableRow key={row.id} className='relative'>
                 {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id} className='px-4'>
+                  <TableCell key={cell.id} className='px-4 tabular-nums'>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
                 ))}

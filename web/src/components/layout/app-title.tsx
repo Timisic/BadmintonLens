@@ -1,64 +1,31 @@
 import { Link } from '@tanstack/react-router'
-import { Menu, X } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { Aperture } from 'lucide-react'
 import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar'
-import { Button } from '../ui/button'
 
 export function AppTitle() {
   const { setOpenMobile } = useSidebar()
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-        <SidebarMenuButton
-          size='lg'
-          className='gap-0 py-0 hover:bg-transparent active:bg-transparent'
-          asChild
-        >
-          <div>
-            <Link
-              to='/'
-              onClick={() => setOpenMobile(false)}
-              className='grid flex-1 text-start text-sm leading-tight'
-            >
-              <span className='truncate font-bold'>BadmintonLens</span>
-              <span className='truncate text-xs'>杀球逐阶段对比</span>
-            </Link>
-            <ToggleSidebar />
-          </div>
+        <SidebarMenuButton size='lg' asChild>
+          <Link to='/' onClick={() => setOpenMobile(false)}>
+            <span className='flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground'>
+              <Aperture className='size-4' />
+            </span>
+            <span className='grid flex-1 text-start text-sm leading-tight'>
+              <span className='truncate font-semibold'>BadmintonLens</span>
+              <span className='truncate text-xs text-muted-foreground'>
+                杀球对比
+              </span>
+            </span>
+          </Link>
         </SidebarMenuButton>
       </SidebarMenuItem>
     </SidebarMenu>
-  )
-}
-
-function ToggleSidebar({
-  className,
-  onClick,
-  ...props
-}: React.ComponentProps<typeof Button>) {
-  const { toggleSidebar } = useSidebar()
-
-  return (
-    <Button
-      data-sidebar='trigger'
-      data-slot='sidebar-trigger'
-      variant='ghost'
-      size='icon'
-      className={cn('aspect-square size-8 max-md:scale-125', className)}
-      onClick={(event) => {
-        onClick?.(event)
-        toggleSidebar()
-      }}
-      {...props}
-    >
-      <X className='md:hidden' />
-      <Menu className='max-md:hidden' />
-      <span className='sr-only'>收起或展开侧边栏</span>
-    </Button>
   )
 }

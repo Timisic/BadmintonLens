@@ -1,15 +1,18 @@
-import { type Label } from '@/lib/library'
+import { UserCheck } from 'lucide-react'
+import { type Label, useLibrary } from '@/lib/library'
 import { Badge } from '@/components/ui/badge'
 
 export function SwingBadges({ label }: { label: Label }) {
+  const { vocab } = useLibrary()
   return (
-    <span className='flex gap-1'>
-      {label.usable !== undefined && (
-        <Badge variant={label.usable ? 'default' : 'secondary'}>
-          {label.usable ? '可用' : '不可用'}
-        </Badge>
+    <span className='flex items-center gap-1.5'>
+      {label.source === 'human' && (
+        <UserCheck
+          className='size-4 text-muted-foreground'
+          aria-label={vocab.source.human}
+        />
       )}
-      <Badge variant='outline'>{label.source ?? '未标'}</Badge>
+      {label.usable && <Badge>可用</Badge>}
     </span>
   )
 }

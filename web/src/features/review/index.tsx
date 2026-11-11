@@ -1,8 +1,11 @@
+import { Fragment } from 'react'
 import { Link, Outlet, getRouteApi, useNavigate } from '@tanstack/react-router'
+import { UserCheck } from 'lucide-react'
 import { clock, useLibrary } from '@/lib/library'
+import { cn } from '@/lib/utils'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Choice } from '@/components/choice'
 import { Main } from '@/components/layout/main'
-import { SwingBadges } from '@/components/swing-badges'
 import { useReviewList } from './list'
 
 const route = getRouteApi('/_app/review')
@@ -17,13 +20,9 @@ export function ReviewLayout() {
   const filter = (patch: Search) =>
     navigate({ to: '.', search: (prev) => ({ ...prev, ...patch }) })
 
-  const sources: Record<string, string> = { none: '未标' }
-  for (const { swing } of all)
-    if (swing.label.source) sources[swing.label.source] = swing.label.source
-
   return (
-    <Main fluid className='grid items-start gap-6 lg:grid-cols-[18rem_1fr]'>
-      <aside className='flex flex-col gap-2 lg:sticky lg:top-4 lg:max-h-[calc(100svh-6rem)]'>
+    <Main fixed fluid className='gap-6 pt-2 lg:flex-row'>
+      <aside className='flex max-h-[32svh] min-h-0 shrink-0 flex-col gap-3 lg:max-h-none lg:w-60'>
         <Choice
           aria-label='按视频筛选'
           none='全部视频'
@@ -31,50 +30,71 @@ export function ReviewLayout() {
           options={Object.fromEntries(lib.videos.map((v) => [v.id, v.name]))}
           onChange={(video) => filter({ video })}
         />
-        <Choice
-          aria-label='按是否可用筛选'
-          none='可用与否都看'
-          value={search.usable}
-          options={{ yes: '可用', no: '不可用', unset: '没标可用与否' }}
-          onChange={(usable) => filter({ usable })}
-        />
-        <Choice
-          aria-label='按标签来源筛选'
-          none='全部来源'
-          value={search.source}
-          options={sources}
-          onChange={(source) => filter({ source })}
-        />
-        <p className='text-sm text-muted-foreground'>
-          {shown.length} / {all.length} 拍
-        </p>
-        <nav className='flex flex-col overflow-y-auto rounded-md border'>
-          {shown.map(({ video, swing }) => (
-            <Link
-              key={swing.id}
-              to='/review/$swingId'
-              params={{ swingId: swing.id }}
-              search
-              className='flex flex-col gap-1 border-b px-3 py-2 text-sm last:border-b-0 hover:bg-accent'
-              activeProps={{ className: 'bg-accent' }}
-            >
-              <span className='truncate'>{video.name}</span>
-              <span className='flex items-center justify-between gap-2'>
+        <ToggleGroup
+          type='single'
+          variant='outline'
+          size='sm'
+          className='w-full'
+          aria-label='筛选挥拍'
+          value={search.show ?? 'all'}
+          onValueChange={(v) =>
+            filter({ show: v === 'usable' || v === 'todo' ? v : undefined })
+          }
+        >
+          <ToggleGroupItem value='all' className='flex-1'>
+            全部
+          </ToggleGroupItem>
+          <ToggleGroupItem value='usable' className='flex-1'>
+            可用
+          </ToggleGroupItem>
+          <ToggleGroupItem value='todo' className='flex-1'>
+            未审
+          </ToggleGroupItem>
+        </ToggleGroup>
+        <nav className='flex min-h-0 flex-col overflow-y-auto rounded-lg border'>
+          {shown.map(({ video, swing }, i) => (
+            <Fragment key={swing.id}>
+              {video !== shown[i - 1]?.video && (
+                <h2 className='sticky top-0 shrink-0 truncate border-b bg-muted px-3 py-1.5 text-sm font-medium'>
+                  {video.name}
+                </h2>
+              )}
+              <Link
+                to='/review/$swingId'
+                params={{ swingId: swing.id }}
+                search
+                className={cn(
+                  'flex h-9 shrink-0 items-center justify-between border-b px-3 text-sm last:border-b-0 hover:bg-accent',
+                  !swing.label.usable && 'text-muted-foreground'
+                )}
+                activeProps={{ className: 'bg-accent' }}
+              >
                 <span className='font-mono tabular-nums'>
                   {clock(swing.t0)}
                 </span>
-                <SwingBadges label={swing.label} />
-              </span>
-            </Link>
+                {swing.label.source === 'human' ? (
+                  <UserCheck className='size-4' aria-label='已审' />
+                ) : (
+                  swing.label.usable && (
+                    <span
+                      className='size-2 rounded-full bg-primary'
+                      aria-label='可用'
+                    />
+                  )
+                )}
+              </Link>
+            </Fragment>
           ))}
           {shown.length === 0 && (
             <p className='p-3 text-sm text-muted-foreground'>
-              没有符合筛选条件的挥拍。
+              没有符合条件的挥拍。
             </p>
           )}
         </nav>
       </aside>
-      <Outlet />
+      <div className='min-h-0 min-w-0 flex-1 overflow-y-auto'>
+        <Outlet />
+      </div>
     </Main>
   )
 }

@@ -67,6 +67,7 @@ const Library = z
       confidence: names,
       role: names,
       phase: names,
+      source: names,
     }),
     videos: z.array(Video),
   })

@@ -5,8 +5,7 @@ import { ReviewLayout } from '@/features/review'
 export const Route = createFileRoute('/_app/review')({
   validateSearch: z.object({
     video: z.string().optional(),
-    usable: z.enum(['yes', 'no', 'unset']).optional(),
-    source: z.string().optional(),
+    show: z.enum(['usable', 'todo']).optional(),
   }),
   component: ReviewLayout,
 })

@@ -19,7 +19,8 @@ PHASE = {"backswing": "引拍侧身", "racket_low": "拍头最低点", "hit": "�
 ROLE = {"coach": "教练", "user": "我"}
 DEMO = {"demo", "wrong_demo"}
 # label layers, later wins: legacy vision model, pose estimation (reserved for the GPU job), Claude subagent, person
-SOURCES = ["model", "pose", "claude", "human"]
+SOURCE = {"model": "旧模型", "pose": "姿态", "claude": "Claude", "human": "人工"}
+SOURCES = list(SOURCE)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS video(id TEXT PRIMARY KEY, role TEXT NOT NULL CHECK(role IN ('coach','user')),
@@ -91,7 +92,7 @@ def swings(c, role=None):
 def library(c):
     sw = swings(c)
     return {"vocab": {"kind": KIND, "camera": CAMERA, "racket_side": RACKET_SIDE, "confidence": CONFIDENCE,
-                      "phase": PHASE, "role": ROLE},
+                      "phase": PHASE, "role": ROLE, "source": SOURCE},
             "videos": [{**dict(v),
                         "segments": [dict(g) for g in c.execute("SELECT * FROM segment WHERE video_id=? ORDER BY t0", (v["id"],))],
                         "swings": [{k: s[k] for k in ("id", "segment_id", "t0", "t1", "box", "sheet", "label")}

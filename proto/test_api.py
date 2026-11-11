@@ -28,7 +28,7 @@ http = TestClient(api.app)
 label = lambda swing: next(s for v in http.get("/api/library").json()["videos"] for s in v["swings"] if s["id"] == swing)["label"]
 
 lib = http.get("/api/library").json()
-assert set(lib["vocab"]) == {"kind", "camera", "racket_side", "confidence", "phase", "role"}
+assert set(lib["vocab"]) == {"kind", "camera", "racket_side", "confidence", "phase", "role", "source"}
 assert [v["id"] for v in lib["videos"]] == ["vc", "gone", "vu"]
 assert lib["videos"][0]["segments"][0]["kind"] == "demo" and lib["videos"][0]["swings"][0]["box"] == [0, 0, 1, 1]
 assert label("u1") == {**ok, "source": "claude"} and label("u2") == {}
