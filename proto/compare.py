@@ -18,6 +18,10 @@ RANK = list(db.CONFIDENCE)
 def ready(s):
     return s["label"].get("usable") and all(k in s["label"] for k in ("backswing", "racket_low", "hit"))
 
+def demos(lib):
+    """Coach swings a user swing may be compared against."""
+    return [s for s in lib if s["role"] == "coach" and s["kind"] == "demo" and ready(s)]
+
 def pick(user, coach):
     """Same camera side (face_visible + racket_side) is required; same camera preferred; then confident, high fps."""
     key = lambda s: (s["label"].get("face_visible"), s["label"].get("racket_side"))
@@ -26,7 +30,8 @@ def pick(user, coach):
         return None, "库里没有同侧机位的教练示范"
     same = [s for s in side if s["label"].get("camera") == user["label"].get("camera")]
     best = min(same or side, key=lambda s: (RANK.index(s["label"].get("confidence", "low")), -s["fps"]))
-    return best, "" if same else f"没有{db.CAMERA[user['label']['camera']]}机位的示范，用同侧的{db.CAMERA[best['label']['camera']]}"
+    cam = lambda s: db.CAMERA.get(s["label"].get("camera"), "未标")  # camera is optional in a label
+    return best, "" if same else f"没有{cam(user)}机位的示范，用同侧的{cam(best)}"
 
 def times(label):
     key = [label["backswing"], label["racket_low"], label["hit"], label["hit"] + AFTER[0], label["hit"] + AFTER[1]]
@@ -84,7 +89,7 @@ def build(user, coach):
 
 if __name__ == "__main__":
     lib = db.swings(db.connect())
-    coach = [s for s in lib if s["role"] == "coach" and s["kind"] == "demo" and ready(s)]
+    coach = demos(lib)
     for u in lib:
         if u["role"] == "user" and ready(u) and (not sys.argv[1:] or any(a in u["name"] for a in sys.argv[1:])):
             build(u, coach)
