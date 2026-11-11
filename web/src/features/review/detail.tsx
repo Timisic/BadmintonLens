@@ -5,7 +5,6 @@ import {
   type LabelDraft,
   type Swing,
   clock,
-  phases,
   storeUrl,
   useDeleteLabel,
   useLibrary,
@@ -209,7 +208,7 @@ function LabelForm({
           />
         </Field>
       ))}
-      {phases(lib).map((key) => (
+      {lib.phases.map((key) => (
         <Field
           key={key}
           id={key}

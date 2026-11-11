@@ -58,17 +58,23 @@ const Video = z.object({
   swings: z.array(Swing),
 })
 
-const Library = z.object({
-  vocab: z.object({
-    kind: names,
-    camera: names,
-    racket_side: names,
-    confidence: names,
-    role: names,
-    phase: z.record(phase, z.string()),
-  }),
-  videos: z.array(Video),
-})
+const Library = z
+  .object({
+    vocab: z.object({
+      kind: names,
+      camera: names,
+      racket_side: names,
+      confidence: names,
+      role: names,
+      phase: names,
+    }),
+    videos: z.array(Video),
+  })
+  .transform((lib) => ({
+    ...lib,
+    // the label fields that hold phase times, in the backend's order
+    phases: z.array(phase).parse(Object.keys(lib.vocab.phase)),
+  }))
 
 const Side = z.object({
   swing: Swing.extend({
@@ -96,7 +102,6 @@ export type Segment = z.infer<typeof Segment>
 export type Video = z.infer<typeof Video>
 export type Library = z.infer<typeof Library>
 export type Match = z.infer<typeof Match>
-export type Phase = z.infer<typeof phase>
 export type LabelDraft = Omit<Label, 'source'>
 
 async function api(path: string, init?: RequestInit) {
@@ -147,8 +152,6 @@ export const useDeleteLabel = () =>
   useLabelMutation((id: string) =>
     api(`/api/swings/${id}/label`, { method: 'DELETE' })
   )
-
-export const phases = (lib: Library) => Object.keys(lib.vocab.phase) as Phase[]
 
 export const storeUrl = (key: string) =>
   '/store/' + key.split('/').map(encodeURIComponent).join('/')
