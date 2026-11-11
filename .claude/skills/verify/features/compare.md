@@ -15,5 +15,6 @@ node .claude/skills/verify/shoot.mjs compare '/compare?swing=<userSwingId>' --do
 Proof: two rows of nine pictures with the whole player in frame, head to feet, the hit column reads `0.00s` in both rows, and everything fits in 1440×900.
 
 ## Gotchas
+- The crop comes from `pose.npz` next to the video's swings. Without that file the cell shows the swing's looser box and the player looks small.
 - Only user swings that are usable and have backswing, racket low and hit can be compared. Others never appear in the picker.
 - No coach demo with a matching camera gives a dashed notice and my row alone.

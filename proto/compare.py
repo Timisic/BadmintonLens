@@ -5,6 +5,7 @@ for both rows, so different tempos still line up by phase. Every frame is captio
   python3 compare.py [name ...]     your video names (substring); default all -> store/compare/<name>_<time>.jpg
 """
 import bisect, os, sys
+from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import clean, db, store
@@ -39,6 +40,24 @@ def times(label):
     for a, b in zip(key, key[1:]):
         out += [a + (b - a) * j / (N + 1) for j in range(N + 1)]
     return out + [key[-1]]
+
+def view(s):
+    """Tight box around the player over the compared frames, x0 y0 x1 y1 as fractions of the picture. Falls back to the swing's box."""
+    f = store.ROOT / Path(s["sheet"] or "").parent.parent / "pose.npz"
+    if not f.is_file():
+        return s["box"]
+    ts = times(s["label"])
+    # shortcut: frame index from t * fps, which drifts on variable frame rate video; fine for a crop, use clean.frame_pts if it ever cuts a limb
+    b = np.load(f)["boxes"][round(ts[0] * s["fps"]):round(ts[-1] * s["fps"]) + 1].astype(float)
+    cx = (b[..., 0] + b[..., 2]) / 2
+    ok = (b[..., 2] > b[..., 0]) & (cx > s["box"][0]) & (cx < s["box"][2])  # people sorted largest first; keep those in the swing's column
+    b = np.array([p[m][0] for p, m in zip(b, ok) if m.any()])
+    if not len(b):
+        return s["box"]
+    x0, y0, x1, y1 = b[:, 0].min(), b[:, 1].min(), b[:, 2].max(), b[:, 3].max()
+    w, h = x1 - x0, y1 - y0
+    # the pose box stops at the hand: leave room for the racket, mostly above
+    return [max(0, x0 - w * .1), max(0, y0 - h * .3), min(1, x1 + w * .1), min(1, y1 + h * .05)]
 
 def row(s):
     video = str(store.src(s["src"]))

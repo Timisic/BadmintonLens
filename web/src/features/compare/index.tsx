@@ -71,7 +71,7 @@ function Aligned({ match }: { match: Match }) {
         </Alert>
       )}
       <div
-        className='grid items-center gap-x-4 gap-y-3'
+        className='grid items-center gap-x-2 gap-y-3'
         style={{
           gridTemplateColumns: `5rem repeat(${match.cols.length * 2 - 1}, minmax(0, 1fr))`,
         }}
@@ -97,7 +97,7 @@ function Aligned({ match }: { match: Match }) {
 }
 
 function Row({
-  side: { swing, times },
+  side: { swing, times, box },
   step,
 }: {
   side: Match['user']
@@ -132,7 +132,7 @@ function Row({
             fps={swing.fps}
             start={t}
             maxHeight='calc(50svh - 7.5rem)'
-            box={swing.box}
+            box={box}
             format={fromHit}
           />
         ))}

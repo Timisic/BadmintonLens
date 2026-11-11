@@ -54,6 +54,7 @@ assert label("u1")["source"] == "claude"
 m = http.get("/api/swings/u1/match").json()
 assert m["cols"][2] == db.PHASE["hit"] and m["step"] == 3 and m["note"] == ""
 assert m["coach"]["swing"]["id"] == "c1" and m["user"]["swing"]["video_id"] == "vu"
+assert m["user"]["box"] == m["user"]["swing"]["box"]  # no pose file here: the swing's own box
 assert len(m["user"]["times"]) == 13 and [m["user"]["times"][i] for i in (0, 3, 6)] == [1.0, 1.4, 1.5]
 not_ready = http.get("/api/swings/u2/match")
 assert not_ready.status_code == 400 and db.PHASE["hit"] in not_ready.json()["detail"]

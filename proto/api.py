@@ -60,7 +60,7 @@ def match(swing_id: str):
         need = "、".join(db.PHASE[k] for k in ("backswing", "racket_low", "hit"))
         raise HTTPException(400, f"这一拍还不能对比：要先标为可用，并标好{need}")
     coach, note = compare.pick(user, compare.demos(lib))
-    side = lambda s: {"swing": s, "times": compare.times(s["label"])}
+    side = lambda s: {"swing": s, "times": compare.times(s["label"]), "box": compare.view(s)}
     return {"cols": compare.COLS, "step": compare.N + 1, "note": note, "user": side(user),
             "coach": coach and side(coach)}
 

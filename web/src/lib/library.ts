@@ -86,6 +86,7 @@ const Side = z.object({
     label: Label.required({ hit: true }),
   }),
   times: z.array(z.number()),
+  box: Box.nullable(),
 })
 
 const Match = z.object({
