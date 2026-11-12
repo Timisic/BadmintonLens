@@ -13,17 +13,8 @@ import {
 } from '@/lib/library'
 import { cn } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Slider } from '@/components/ui/slider'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Choice } from '@/components/choice'
@@ -286,8 +277,6 @@ function Diagnosis({ coach, me }: { coach: Comparable; me: Comparable }) {
   const checks = data?.checks
   const found = checks?.filter((c) => c.short || c.video.habit) ?? []
   const habits = checks?.filter((c) => c.video.habit) ?? []
-  const percent = (value: number, c: Check) =>
-    Math.round((Math.max(value, 0) / Math.max(c.coach, 0.01)) * 100)
   return (
     <section className='flex flex-col gap-4 border-t pt-5'>
       <div className='flex flex-col gap-1'>
@@ -312,62 +301,10 @@ function Diagnosis({ coach, me }: { coach: Comparable; me: Comparable }) {
           这两拍里有一拍的姿态读不准，没法量。换一拍试试。
         </p>
       )}
-      {checks && (
-        <div className='overflow-x-auto rounded-lg border'>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>阶段</TableHead>
-                <TableHead>看什么</TableHead>
-                <TableHead className='w-1/4'>这一拍，教练是 100%</TableHead>
-                <TableHead>这个视频</TableHead>
-                <TableHead />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {checks.map((c) => (
-                <TableRow key={c.key}>
-                  <TableCell className='text-muted-foreground'>
-                    {c.phase}
-                  </TableCell>
-                  <TableCell className='font-medium'>{c.name}</TableCell>
-                  <TableCell>
-                    <span className='flex items-center gap-3'>
-                      <span className='h-1.5 min-w-16 flex-1 rounded-full bg-muted'>
-                        <span
-                          className={cn(
-                            'block h-full rounded-full',
-                            c.short ? 'bg-yellow-500' : 'bg-primary'
-                          )}
-                          style={{
-                            width: `${Math.min(percent(c.me, c), 100)}%`,
-                          }}
-                        />
-                      </span>
-                      <span className='w-10 text-right font-mono text-sm tabular-nums'>
-                        {percent(c.me, c)}%
-                      </span>
-                    </span>
-                  </TableCell>
-                  <TableCell className='tabular-nums'>
-                    {c.video.short === 0 ? (
-                      <span className='text-muted-foreground'>都够</span>
-                    ) : (
-                      `${c.video.total} 拍里 ${c.video.short} 拍不够`
-                    )}
-                  </TableCell>
-                  <TableCell className='text-right'>
-                    {c.short ? (
-                      <Badge className='bg-yellow-500 text-black'>不够</Badge>
-                    ) : (
-                      <Badge variant='outline'>接近教练</Badge>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+      {checks && found.length === 0 && (
+        <p className='text-muted-foreground'>
+          这一拍没有量出明显落后教练的地方。
+        </p>
       )}
       {found.map((check) => (
         <Finding key={check.key} check={check} coach={coach} me={me} />

@@ -8,7 +8,7 @@ The coach's own words come from the transcript segments that mention the check's
 import numpy as np
 import compare, db
 
-SHOULDER, WRIST, ANKLE = 5, 9, 15  # the left one of each COCO pair; +1 is the right
+SHOULDER, WRIST, HIP, ANKLE = 5, 9, 11, 15  # the left one of each COCO pair; +1 is the right
 PHASE = {"prep": "引拍", "hit": "击球", "after": "击球后"}
 # In the order a swing happens. name: what is measured. fault: what it means to fall short. {r} is the racket side,
 # {o} the other. margin: how far two good swings differ anyway, read off the coach demos in the library.
@@ -16,6 +16,9 @@ PHASE = {"prep": "引拍", "hit": "击球", "after": "击球后"}
 CHECKS = {
     "off_up": {"phase": "prep", "name": "{o}手上举", "fault": "引拍时{o}手抬得不够高", "margin": 0.25,
                "look": (WRIST, 1, [-0.6, -0.45, -0.3]), "words": ["抬左手", "左手再抬", "展肩", "舒展"]},
+    # only from behind or in front: there a lean back shows as a lean to the side, away from the racket hand
+    "lean": {"phase": "prep", "name": "上身后仰", "fault": "引拍时上身是直的，没有向{o}后方仰", "margin": 0.08,
+             "look": (SHOULDER, 1, [-0.6, -0.45, -0.35]), "words": ["侧身", "往后倒", "后仰"]},
     "off_pull": {"phase": "hit", "name": "{o}手下拉", "fault": "挥拍时{o}手没有往下拉", "margin": 0.3,
                  "look": (WRIST, 1, [-0.4, -0.2, 0]), "words": ["拉左手", "左手往后", "往下拉", "拉左肩", "左肘"]},
     "tilt": {"phase": "hit", "name": "{r}肩顶起", "fault": "击球时两肩是平的，{r}肩没有顶上去", "margin": 0.15,
@@ -46,10 +49,15 @@ def measure(s, racket):
         v = v[(d >= a) & (d <= b)]
         return None if np.isnan(v).all() else float(np.nanmax(v))
     now = 1 / s["fps"]  # the hit frame itself
+    mid = lambda joint: k[:, [joint, joint + 1], 0].mean(1)
+    # the off side is on the left of the picture for a right-hander seen from behind, or a left-hander from the front
+    left = {"back": racket == 1, "front": racket == 0}.get(s["label"].get("camera"))
+    early = (mid(SHOULDER) - mid(HIP))[(d >= -0.6) & (d <= -0.35)] / unit
     floor = np.nanpercentile(k[:, [ANKLE, ANKLE + 1], 1], 95)
     up, at_hit = peak(above(SHOULDER + off, WRIST + off), -0.9, -0.15), peak(above(SHOULDER + off, WRIST + off), -now, now)
     out = {
         "off_up": up,
+        "lean": None if left is None or np.isnan(early).all() else float(np.nanmedian(early)) * (-1 if left else 1),
         "off_pull": None if up is None or at_hit is None else up - at_hit,
         "tilt": peak(above(SHOULDER + off, SHOULDER + racket), -now, now),
         "reach": peak(above(SHOULDER + racket, WRIST + racket), -now, now),

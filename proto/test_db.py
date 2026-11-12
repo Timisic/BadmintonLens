@@ -59,6 +59,10 @@ leg = found[-1]
 assert leg["video"] == {"short": 1, "total": 1, "value": leg["me"], "habit": True} and leg["coach"] > leg["me"]
 # both players are shown at the same moments, the joint to watch marked in each
 assert [f["at"] for f in leg["frames"]] == [0.1, 0.25, 0.4] and all(len(f["me"]) == len(f["coach"]) == 2 for f in leg["frames"])
+# from behind, the coach leans away from the racket hand before the hit and I stand straight
+back = {**me, "label": {"hit": 1.1, "camera": "back"}}
+lifted[:, 5:7, 0] -= 0.3 * compare.torso(lifted)
+assert [f["key"] for f in diagnose.diagnose(c, back, {**back, "coach": True}, [back]) if f["short"]] == ["lean", "leg"]
 found = [leg]
 assert [(l["t0"], l["t1"], l["text"]) for l in found[0]["lessons"]] == [(0, 9, "右腿会抬起来右腿离开地")]  # neighbours read as one
 print("ok")
