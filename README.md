@@ -70,7 +70,7 @@ Vite 把 `/api` 和 `/store` 代理到 API，所以浏览器只访问 5173 端�
 
 网页播放的是 `store/<角色>/<视频名>/play.mp4`：H.264、半秒一个关键帧、索引在文件头，每一帧的时间与源视频完全一致（生成时逐帧校验）。它跟着 store 同步，所以源视频挪走或换一台机器，网页照常能看。没有这份文件时退回源视频。
 
-依赖：Node 20.19+、pnpm、`pip install fastapi uvicorn httpx`（httpx 只有自检用）。自检：`cd proto && python3 test_db.py && python3 test_api.py`，`cd web && pnpm test && pnpm build && pnpm lint`（`pnpm test` 用本机的 Chrome）。
+依赖：Node 20.19+、pnpm、`pip install fastapi uvicorn httpx`（httpx 只有自检用）。自检：`./check.sh`，依次跑 Python 自检、`pnpm test`（用本机的 Chrome）、构建、lint、格式和 knip 死代码检查。
 
 ## 约定
 

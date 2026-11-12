@@ -29,11 +29,14 @@ def pairs(lib):
     return {u["id"]: [c["id"] for c in coach if c["label"].get("camera") == u["label"].get("camera")]
             for u in lib if u["role"] == "user" and ready(u)}
 
-@lru_cache(maxsize=None)
 def pose(folder):
+    # keyed on the files' mtimes: the API outlives a `store.py pull` that brings a new pose.npz or play.mp4
+    return _pose(folder, *((folder / f).stat().st_mtime_ns for f in ("pose.npz", "play.mp4")))
+
+@lru_cache(maxsize=256)
+def _pose(folder, *_):
     z = np.load(folder / "pose.npz")
-    video = folder / "play.mp4"
-    return z["kpts"], z["boxes"], np.array(clean.frame_pts(video))
+    return z["kpts"], z["boxes"], np.array(clean.frame_pts(folder / "play.mp4"))
 
 def player(s, a, b):
     """Frame times, keypoints [n, 17, 3] and boxes [n, 4] of the swing's player from a to b seconds. A frame where

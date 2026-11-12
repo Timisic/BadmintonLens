@@ -19,6 +19,9 @@ def need_swing(c, swing_id):
     if not c.execute("SELECT 1 FROM swing WHERE id=?", (swing_id,)).fetchone():
         raise HTTPException(404, f"没有这一拍：{swing_id}")
 
+def play_copy(s):
+    return store.ROOT / s["role"] / s["name"] / "play.mp4"
+
 @app.get("/api/library")
 def library():
     with closing(db.connect()) as c:
@@ -30,14 +33,11 @@ def source(video_id: str, sound: bool = False):
         v = c.execute("SELECT role, name, src FROM video WHERE id=?", (video_id,)).fetchone()
     # the browser copy (clean.py play) when there is one: it plays everywhere and survives the source moving.
     # It is silent, so a coach explaining plays from the source.
-    files = [v and store.ROOT / v["role"] / v["name"] / "play.mp4", v and store.src(v["src"])]
+    files = [v and play_copy(v), v and store.src(v["src"])]
     for f in files[::-1] if sound else files:
         if f and f.is_file():
             return FileResponse(f)
     raise HTTPException(404, "找不到源视频")
-
-def play_copy(s):
-    return store.ROOT / s["role"] / s["name"] / "play.mp4"
 
 @app.put("/api/swings/{swing_id}/label")
 def save_label(swing_id: str, body: dict):

@@ -6,7 +6,10 @@ root = Path(tempfile.mkdtemp())
 os.environ["LENS_STORE"] = str(root)  # store.ROOT is read at import
 
 from fastapi.testclient import TestClient
-import api, db
+import api, db, store
+
+# run alone: imported after anything that loaded store, this would write into the real library
+assert store.ROOT == root, f"store already loaded from {store.ROOT}; run python3 test_api.py on its own"
 
 src = root / "v.mp4"
 src.write_bytes(bytes(range(256)) * 4)
