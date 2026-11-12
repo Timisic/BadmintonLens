@@ -258,14 +258,6 @@ def clip(video, first, n, size, fps):
                          capture_output=True, check=True).stdout
     return np.frombuffer(raw, np.uint8).reshape(-1, h, w, 3)
 
-def frames_at(video, idx, fps, height=960):
-    """PIL frames for indices idx, decoding only the span they cover."""
-    W, H = dsize(video)
-    size = (round(W * height / H / 2) * 2, height)
-    a = min(idx)
-    fr = clip(video, a, max(idx) - a + 1, size, fps)
-    return [Image.fromarray(fr[i - a]) for i in idx]
-
 def motion_box(frames, thr=25, pad=0.15):
     """Box around pixels that change across frames (N,H,W,3), padded."""
     g = frames.mean(axis=3)

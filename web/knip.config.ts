@@ -1,10 +1,8 @@
 import type { KnipConfig } from 'knip'
 
 const config: KnipConfig = {
-  ignore: [
-    'src/components/ui/**',
-    'src/tanstack-table.d.ts',
-  ],
+  // vendored shadcn files keep their full export list; an unused file still fails
+  ignoreIssues: { 'src/components/ui/**': ['exports', 'types'] },
 }
 
 export default config

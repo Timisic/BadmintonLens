@@ -119,14 +119,10 @@ const Diagnosis = z.object({
 
 export type Label = z.infer<typeof Label>
 export type Box = z.infer<typeof Box>
-export type Swing = z.infer<typeof Swing>
-export type Segment = z.infer<typeof Segment>
 export type Video = z.infer<typeof Video>
-export type Library = z.infer<typeof Library>
 export type Comparable = z.infer<typeof Comparable>
-export type Compare = z.infer<typeof Compare>
 export type Check = z.infer<typeof Check>
-export type Lesson = z.infer<typeof Lesson>
+type Lesson = z.infer<typeof Lesson>
 /** What a person says about a swing. A field left out keeps its value, null takes it back. */
 export type LabelPatch = { usable?: boolean; camera?: string; hit?: number }
 
