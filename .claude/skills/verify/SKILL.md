@@ -37,7 +37,7 @@ Get real ids from `curl -s localhost:8765/api/library`. In zsh, unquoted variabl
 
 Stable handles: roles and Chinese names. `getByRole('button', { name: '设为当前帧' })`, `'上一帧'`, `'下一帧'`, `'跳到击球点'`, `'删除'`, `'恢复'`, `getByRole('radio', { name: '左侧面' })`. Keys on a swing page: `ArrowLeft`/`ArrowRight` frame, `Space` play.
 
-`node .claude/skills/verify/time.mjs <path> [runs]` prints the milliseconds from navigation until every `<video>` on the page shows its frame. The compare page with 14 stills, the finding stills and the lesson videos takes about 1.4 s on this machine once warm (the first load after a restart is slower); treat a jump well past that as a regression.
+`node .claude/skills/verify/time.mjs <path> [runs]` prints the milliseconds from navigation until every `<video>` on the page shows its frame. The compare page with one finding (23 videos: 14 stills, 6 finding stills, 3 lesson videos) takes about 1.2 to 1.7 s on this machine once warm, the first run of a browser up to about 1.9 s; the time grows with the number of videos, and the JSON calls are done by about 0.3 s. Treat a jump well past that as a regression only after checking `uptime` and that no Chrome from an earlier, killed run is still streaming video.
 
 The API also serves `web/dist` on its own port, so `http://127.0.0.1:8765/` is the built app after `pnpm build`.
 
