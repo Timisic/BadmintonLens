@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { DataTableColumnHeader } from '@/components/data-table'
+import { DataTableColumnHeader } from '@/components/column-header'
 import { Main } from '@/components/layout/main'
 
 const col = createColumnHelper<Video>()
