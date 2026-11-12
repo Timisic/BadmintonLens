@@ -13,10 +13,20 @@ import {
 } from '@/lib/library'
 import { cn } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Slider } from '@/components/ui/slider'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Choice } from '@/components/choice'
 import { FramePlayer, type FramePlayerHandle } from '@/components/frame-player'
 import { IconButton } from '@/components/icon-button'
 import { Main } from '@/components/layout/main'
@@ -49,34 +59,12 @@ export function Compare() {
     (id) => coaches.find((s) => s.id === id) ?? []
   )
   const coach = partners.find((s) => s.id === search.coach) ?? partners[0]
-  const cameras = [...new Set(mine.flatMap((s) => s.camera ?? []))]
+  // One video is one session on one tripod: pick the video, then a swing of it.
+  const videos = [...new Map(mine.map((s) => [s.video_id, s])).values()]
 
   return (
     <Main fluid className='flex flex-col gap-5 pt-2'>
-      <div className='flex flex-wrap items-center justify-between gap-3'>
-        <h1 className='text-2xl font-bold tracking-tight'>对比</h1>
-        {cameras.length > 1 && (
-          <ToggleGroup
-            type='single'
-            variant='outline'
-            size='sm'
-            aria-label='机位'
-            value={me?.camera ?? ''}
-            onValueChange={(v) =>
-              v &&
-              navigate({
-                search: { swing: mine.find((s) => s.camera === v)?.id },
-              })
-            }
-          >
-            {cameras.map((c) => (
-              <ToggleGroupItem key={c} value={c}>
-                {vocab.camera[c] ?? c}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-        )}
-      </div>
+      <h1 className='text-2xl font-bold tracking-tight'>对比</h1>
       {isPending && <Skeleton className='h-[70svh]' />}
       {error && (
         <Alert variant='destructive'>
@@ -94,30 +82,68 @@ export function Compare() {
       )}
       {data && me && (
         <>
-          <div className='flex flex-col gap-1'>
-            <Strip
-              title='我'
-              swings={mine.filter((s) => s.camera === me.camera)}
-              value={me.id}
-              onPick={(swing) =>
-                navigate({ search: { swing, coach: coach?.id } })
-              }
-            />
-            {coach ? (
+          <div className='grid gap-x-8 gap-y-4 lg:grid-cols-[1fr_auto]'>
+            <div className='flex min-w-0 flex-col gap-2'>
+              <div className='flex flex-wrap items-center gap-3'>
+                <h2 className='text-sm font-medium'>我的视频</h2>
+                <div className='w-72 max-w-full'>
+                  <Choice
+                    aria-label='选我的视频'
+                    value={me.video_id}
+                    options={Object.fromEntries(
+                      videos.map((s) => [
+                        s.video_id,
+                        [
+                          s.name,
+                          vocab.camera[s.camera ?? ''],
+                          `${mine.filter((m) => m.video_id === s.video_id).length} 拍`,
+                        ]
+                          .filter(Boolean)
+                          .join(' · '),
+                      ])
+                    )}
+                    onChange={(id) =>
+                      navigate({
+                        search: {
+                          swing: mine.find((s) => s.video_id === id)?.id,
+                        },
+                      })
+                    }
+                  />
+                </div>
+              </div>
               <Strip
-                title='教练'
-                swings={partners}
-                value={coach.id}
-                onPick={(id) =>
-                  navigate({ search: { swing: me.id, coach: id } })
+                label='选我的一拍'
+                swings={mine.filter((s) => s.video_id === me.video_id)}
+                value={me.id}
+                onPick={(swing) =>
+                  navigate({ search: { swing, coach: coach?.id } })
                 }
               />
-            ) : (
-              <p className='rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground'>
-                库里没有从{vocab.camera[me.camera ?? ''] ?? '这个机位'}
-                拍的教练示范，只能看我自己的这一拍。
-              </p>
-            )}
+            </div>
+            <div className='flex min-w-0 flex-col gap-2'>
+              <h2 className='flex h-9 items-center text-sm font-medium'>
+                教练示范
+                <span className='ms-2 font-normal text-muted-foreground'>
+                  同样从{vocab.camera[me.camera ?? ''] ?? '这个机位'}拍
+                </span>
+              </h2>
+              {coach ? (
+                <Strip
+                  label='选教练的一拍'
+                  named
+                  swings={partners}
+                  value={coach.id}
+                  onPick={(id) =>
+                    navigate({ search: { swing: me.id, coach: id } })
+                  }
+                />
+              ) : (
+                <p className='text-sm text-muted-foreground'>
+                  库里没有，只能看我自己的这一拍。
+                </p>
+              )}
+            </div>
           </div>
           <Tabs defaultValue='stills' key={`${coach?.id} ${me.id}`}>
             <TabsList>
@@ -140,69 +166,54 @@ export function Compare() {
   )
 }
 
-/** One side's swings as small pictures. The picture is the name. */
+/** Swings as numbered pictures, in the order they were played. */
 function Strip({
-  title,
+  label,
+  named,
   swings,
   value,
   onPick,
 }: {
-  title: string
+  label: string
+  /** Say which video each is from: the coach's come from several. */
+  named?: boolean
   swings: Comparable[]
   value: string
   onPick: (id: string) => void
 }) {
   return (
-    <div className='flex items-center gap-3'>
-      <h2 className='w-8 shrink-0 text-sm font-medium'>{title}</h2>
-      <div
-        role='radiogroup'
-        aria-label={`选${title}的一拍`}
-        className='flex gap-4 overflow-x-auto p-1.5'
-      >
-        {[...new Set(swings.map((s) => s.name))].map((name) => (
-          <div key={name} className='flex shrink-0 flex-col gap-1.5'>
-            <span className='sticky left-0 w-fit text-xs text-muted-foreground'>
-              {name}
-            </span>
-            <div className='flex gap-2'>
-              {swings
-                .filter((s) => s.name === name)
-                .map((s) => (
-                  <button
-                    key={s.id}
-                    type='button'
-                    role='radio'
-                    aria-checked={s.id === value}
-                    aria-label={`${s.name} ${clock(s.hit)}`}
-                    title={`${s.name} ${clock(s.hit)}`}
-                    ref={(el) => {
-                      if (s.id === value)
-                        el?.scrollIntoView({
-                          block: 'nearest',
-                          inline: 'nearest',
-                        })
-                    }}
-                    onClick={() => onPick(s.id)}
-                    className={cn(
-                      'w-9 shrink-0 overflow-hidden rounded-md bg-muted ring-offset-2 ring-offset-background transition-opacity',
-                      s.id === value
-                        ? 'ring-2 ring-primary'
-                        : 'opacity-50 hover:opacity-100'
-                    )}
-                  >
-                    <img
-                      src={thumbUrl(s.id, s.hit)}
-                      alt=''
-                      loading='lazy'
-                      className='aspect-[1/2] w-full object-cover'
-                    />
-                  </button>
-                ))}
-            </div>
-          </div>
-        ))}
-      </div>
+    <div role='radiogroup' aria-label={label} className='flex flex-wrap gap-2'>
+      {swings.map((s, i) => (
+        <button
+          key={s.id}
+          type='button'
+          role='radio'
+          aria-checked={s.id === value}
+          aria-label={`${s.name} ${clock(s.hit)}`}
+          title={`${s.name} ${clock(s.hit)}`}
+          onClick={() => onPick(s.id)}
+          className={cn(
+            'flex flex-col items-center gap-1 text-xs transition-opacity',
+            named ? 'w-24' : 'w-11',
+            s.id === value
+              ? 'font-medium'
+              : 'text-muted-foreground opacity-60 hover:opacity-100'
+          )}
+        >
+          <img
+            src={thumbUrl(s.id, s.hit)}
+            alt=''
+            loading='lazy'
+            className={cn(
+              'aspect-[1/2] w-11 rounded-md bg-muted object-cover ring-offset-2 ring-offset-background',
+              s.id === value && 'ring-2 ring-primary'
+            )}
+          />
+          <span className='w-full truncate text-center'>
+            {named ? s.name : i + 1}
+          </span>
+        </button>
+      ))}
     </div>
   )
 }
@@ -269,38 +280,98 @@ function Stills({
   )
 }
 
-/** What the coach does that I do not, each with the coach explaining it. */
+/** The whole swing against the coach's, phase by phase, and the same over the video it came from. */
 function Diagnosis({ coach, me }: { coach: Comparable; me: Comparable }) {
   const { data, error, isPending } = useDiagnosis(me.id, coach.id)
-  const found = data?.checks?.filter((c) => c.short) ?? []
-  const close = data?.checks?.filter((c) => !c.short) ?? []
+  const checks = data?.checks
+  const found = checks?.filter((c) => c.short || c.video.habit) ?? []
+  const habits = checks?.filter((c) => c.video.habit) ?? []
+  const percent = (value: number, c: Check) =>
+    Math.round((Math.max(value, 0) / Math.max(c.coach, 0.01)) * 100)
   return (
     <section className='flex flex-col gap-4 border-t pt-5'>
-      <h2 className='text-xl font-semibold tracking-tight'>差在哪</h2>
+      <div className='flex flex-col gap-1'>
+        <h2 className='text-xl font-semibold tracking-tight'>诊断</h2>
+        {data && checks && (
+          <p className='text-muted-foreground'>
+            {data.video.name} 的 {data.video.swings} 拍
+            {habits.length > 0
+              ? `，多数都有的问题：${habits.map((c) => c.fault).join('；')}。`
+              : '没有共同的问题。'}
+          </p>
+        )}
+      </div>
       {isPending && <Skeleton className='h-48' />}
       {error && (
         <Alert variant='destructive'>
           <AlertDescription>{error.message}</AlertDescription>
         </Alert>
       )}
-      {data && !data.checks && (
+      {data && !checks && (
         <p className='text-muted-foreground'>
           这两拍里有一拍的姿态读不准，没法量。换一拍试试。
         </p>
       )}
-      {data?.checks && found.length === 0 && (
-        <p className='text-muted-foreground'>
-          量过的几项都和教练接近，这一拍没有找到明显的差别。
-        </p>
+      {checks && (
+        <div className='overflow-x-auto rounded-lg border'>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>阶段</TableHead>
+                <TableHead>看什么</TableHead>
+                <TableHead className='w-1/4'>这一拍，教练是 100%</TableHead>
+                <TableHead>这个视频</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {checks.map((c) => (
+                <TableRow key={c.key}>
+                  <TableCell className='text-muted-foreground'>
+                    {c.phase}
+                  </TableCell>
+                  <TableCell className='font-medium'>{c.name}</TableCell>
+                  <TableCell>
+                    <span className='flex items-center gap-3'>
+                      <span className='h-1.5 min-w-16 flex-1 rounded-full bg-muted'>
+                        <span
+                          className={cn(
+                            'block h-full rounded-full',
+                            c.short ? 'bg-yellow-500' : 'bg-primary'
+                          )}
+                          style={{
+                            width: `${Math.min(percent(c.me, c), 100)}%`,
+                          }}
+                        />
+                      </span>
+                      <span className='w-10 text-right font-mono text-sm tabular-nums'>
+                        {percent(c.me, c)}%
+                      </span>
+                    </span>
+                  </TableCell>
+                  <TableCell className='tabular-nums'>
+                    {c.video.short === 0 ? (
+                      <span className='text-muted-foreground'>都够</span>
+                    ) : (
+                      `${c.video.total} 拍里 ${c.video.short} 拍不够`
+                    )}
+                  </TableCell>
+                  <TableCell className='text-right'>
+                    {c.short ? (
+                      <Badge className='bg-yellow-500 text-black'>不够</Badge>
+                    ) : (
+                      <Badge variant='outline'>接近教练</Badge>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
       {found.map((check) => (
         <Finding key={check.key} check={check} coach={coach} me={me} />
       ))}
-      {close.length > 0 && (
-        <p className='text-sm text-muted-foreground'>
-          和教练接近的：{close.map((c) => c.name).join('、')}。
-        </p>
-      )}
     </section>
   )
 }
@@ -314,50 +385,54 @@ function Finding({
   coach: Comparable
   me: Comparable
 }) {
-  const [often, total] = check.habit
-  const most = Math.max(check.coach.value, check.me.value, 0.01)
   return (
-    <article className='grid gap-6 rounded-lg border p-4 md:grid-cols-[auto_1fr]'>
-      <div className='flex justify-center gap-3'>
-        {([coach, me] as const).map((swing) => {
-          const shown = check[swing.role === 'coach' ? 'coach' : 'me']
-          return (
-            <figure key={swing.id} className='flex w-36 flex-col gap-1.5'>
+    <article className='grid gap-6 rounded-lg border p-4 xl:grid-cols-[auto_1fr]'>
+      {/* the same moments for both, so the difference is the movement and not the timing */}
+      <div
+        className='grid items-center justify-items-center gap-2 self-start'
+        style={{
+          gridTemplateColumns: `2rem repeat(${check.frames.length}, minmax(0, 7.5rem))`,
+        }}
+      >
+        <span />
+        {check.frames.map(({ at }) => (
+          <span
+            key={at}
+            className='font-mono text-xs text-muted-foreground tabular-nums'
+          >
+            {at === 0 ? '击球' : fromHit(at)}
+          </span>
+        ))}
+        {[coach, me].map((swing) => (
+          <div key={swing.id} className='contents'>
+            <h4 className='justify-self-start text-sm font-medium'>
+              {side(swing)}
+            </h4>
+            {check.frames.map((f) => (
               <FramePlayer
+                key={f.at}
                 still
                 frame={9 / 16}
                 videoId={swing.video_id}
                 fps={swing.fps}
-                start={swing.hit + shown.at}
-                maxHeight='16rem'
+                start={swing.hit + f.at}
+                maxHeight='14rem'
                 box={swing.box}
-                spot={shown.spot}
+                spot={swing === coach ? f.coach : f.me}
               />
-              <figcaption className='flex items-center gap-2 text-sm'>
-                <span className='w-8 shrink-0 font-medium'>{side(swing)}</span>
-                <span className='h-1.5 flex-1 rounded-full bg-muted'>
-                  <span
-                    className={cn(
-                      'block h-full rounded-full',
-                      swing === coach ? 'bg-primary' : 'bg-yellow-500'
-                    )}
-                    style={{
-                      width: `${(Math.max(shown.value, 0) / most) * 100}%`,
-                    }}
-                  />
-                </span>
-              </figcaption>
-            </figure>
-          )
-        })}
+            ))}
+          </div>
+        ))}
       </div>
       <div className='flex min-w-0 flex-col gap-4'>
         <div className='flex flex-col gap-1'>
+          <span className='text-sm text-muted-foreground'>{check.phase}</span>
           <h3 className='text-lg font-semibold'>{check.fault}</h3>
           <p className='text-sm text-muted-foreground'>
-            看圈出来的位置。{check.name}的幅度，我是教练的{' '}
-            {Math.round((Math.max(check.me.value, 0) / most) * 100)}%。
-            {total > 1 && `同一个视频的 ${total} 拍里，${often} 拍是这样。`}
+            看圈出来的位置。
+            {check.short ? '' : '这一拍还可以，但这个视频里多数拍子是这样。'}
+            {check.video.total > 1 &&
+              `这个视频的 ${check.video.total} 拍里，${check.video.short} 拍是这样。`}
           </p>
         </div>
         {check.lessons.length > 0 && (

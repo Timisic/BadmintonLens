@@ -34,7 +34,7 @@ type FramePlayerProps = {
   /** A bare picture, driven from outside: no controls under it. */
   still?: boolean
   /** A ring around this point of the picture, as fractions of it. */
-  spot?: [number, number]
+  spot?: [number, number] | null
   /** Width over height every picture should share; the box is fitted inside it. */
   frame?: number
   format?: (t: number) => string

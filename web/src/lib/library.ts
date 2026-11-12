@@ -77,15 +77,6 @@ const Compare = z.object({
   swings: z.array(Comparable),
 })
 
-const Shown = z.object({
-  /** Height difference between two joints, in torso lengths. */
-  value: z.number(),
-  /** Seconds from the hit of the moment that shows it. */
-  at: z.number(),
-  /** The joint to look at, as fractions of the picture. */
-  spot: z.tuple([z.number(), z.number()]),
-})
-
 const Lesson = z.object({
   video_id: z.string(),
   name: z.string(),
@@ -94,21 +85,37 @@ const Lesson = z.object({
   text: z.string(),
 })
 
+const Spot = z.tuple([z.number(), z.number()]).nullable()
+
 const Check = z.object({
   key: z.string(),
+  /** Where in the swing it happens. Checks come in that order. */
+  phase: z.string(),
   name: z.string(),
   fault: z.string(),
-  /** The coach is ahead by more than two good swings differ: a finding. */
+  /** This swing falls short: the coach is ahead by more than two good swings differ. */
   short: z.boolean(),
-  me: Shown,
-  coach: Shown,
-  /** In how many of the swings from the same video the same thing shows. */
-  habit: z.tuple([z.number(), z.number()]),
+  /** Height difference between two joints, in torso lengths. */
+  me: z.number(),
+  coach: z.number(),
+  /** The same check over every swing of the video mine came from. */
+  video: z.object({
+    short: z.number(),
+    total: z.number(),
+    value: z.number(),
+    /** Most of them fall short. */
+    habit: z.boolean(),
+  }),
+  /** Moments to look at, the same seconds from the hit for both, with the joint to watch. */
+  frames: z.array(z.object({ at: z.number(), me: Spot, coach: Spot })),
   lessons: z.array(Lesson),
 })
 
-/** Widest gap first. Null when either swing has no pose data. */
-const Diagnosis = z.object({ checks: z.array(Check).nullable() })
+const Diagnosis = z.object({
+  video: z.object({ name: z.string(), swings: z.number() }),
+  /** Null when either swing has no pose data. */
+  checks: z.array(Check).nullable(),
+})
 
 export type Label = z.infer<typeof Label>
 export type Box = z.infer<typeof Box>

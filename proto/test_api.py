@@ -68,7 +68,7 @@ assert m["swings"][0]["box"] == [0, 0, 1, 1]  # no pose file here: the swing's o
 http.put("/api/swings/u1/label", json={"camera": "left"})
 m = http.get("/api/compare").json()
 assert m["pairs"] == {"u1": []} and len(m["swings"]) == 2
-assert http.get("/api/diagnose?me=u1&coach=c1").json() == {"checks": None}  # no pose here: nothing to say
+assert http.get("/api/diagnose?me=u1&coach=c1").json()["checks"] is None  # no pose here: nothing to say
 assert http.get("/api/diagnose?me=u2&coach=c1").status_code == 404
 assert http.get("/api/swings/u2/thumb").status_code == 404  # no browser copy of that video
 assert http.get("/api/nope").status_code == 404

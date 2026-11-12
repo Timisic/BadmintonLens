@@ -5,6 +5,7 @@ offsets from it for both rows, and whatever differs between the rows is a real d
   python3 compare.py refine     read every swing off pose.npz -> the pose label layer: is it a swing, the hit, the camera
   python3 compare.py standard   keep the best coach demo of each video and camera, drop the coach's other swings
 """
+import warnings
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -67,26 +68,38 @@ def torso(k):
     """Shoulders to hips, the yardstick that makes two people filmed at different sizes comparable."""
     return np.nanmedian(np.linalg.norm(k[:, [L_SHOULDER, R_SHOULDER], :2].mean(1) - k[:, [L_HIP, R_HIP], :2].mean(1), axis=1))
 
-def reading(s):
+def reading(s, hand=None):
     """What the pose shows of a swing, None when it shows no fast hand:
-    hit       when the racket wrist is highest. The faster wrist is the racket's.
+    hit       when the racket wrist is highest. The faster wrist is the racket's, unless `hand` says which it is.
     speed     its peak, in torso lengths per second
     overhead  a real overhead swing: fast, and the hand passes above the head
     hand      0 left, 1 right
     camera    where the camera stands. Seen from the left, a right-hander shows their back while preparing and
               their chest after the hit; from the right it is the reverse; front and back show one side throughout."""
-    hit = s["label"].get("hit")
-    a, b = (s["t0"] - 0.3, s["t1"] + 0.3) if hit is None else (hit - 0.25, hit + 0.2)
+    l = s["label"]
+    # Always the same window, so reading twice gives the same answer. Only a hit a person set narrows it.
+    a, b = (l["hit"] - 0.25, l["hit"] + 0.2) if l.get("source") == "human" and "hit" in l else (s["t0"] - 0.3, s["t1"] + 0.3)
     p = player(s, a - 0.7, b + 0.5)
-    if p is None:
+    if p is None or len(p[0]) < 5:
         return None
     t, k, _ = p
-    w, unit = k[:, [L_WRIST, R_WRIST], :2], torso(k)
-    speed = np.linalg.norm(np.gradient(w, t, axis=0), axis=2) / unit
+    raw, unit = k[:, [L_WRIST, R_WRIST], :2], torso(k)
+    # The pose jumps for a frame now and then. A median over a few frames drops the jump and keeps the swing.
+    def calm(n):
+        pad = np.pad(raw, ((n // 2, n // 2), (0, 0), (0, 0)), mode="edge")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")  # a joint unseen for that long stays unseen
+            return np.nanmedian(np.stack([pad[i:i + len(raw)] for i in range(n)]), axis=0)
+    speed = np.linalg.norm(np.gradient(calm(5), t, axis=0), axis=2) / unit
+    # the top is read from the frames as they are, so it is not blunted, minus the ones that jumped
+    w = np.where(np.abs(raw - calm(3)) > 0.5 * unit, np.nan, raw)
     speed[(t < a) | (t > b)] = np.nan
     if np.isnan(speed).mean() > 0.9 or not np.nanmax(speed) >= 5:
         return None
-    hand = int(np.nanmax(speed, axis=0).argmax())
+    if hand is None:
+        hand = int(np.nanmax(speed, axis=0).argmax())
+    if np.isnan(speed[:, hand]).all():
+        return None
     fast = t[np.nanargmax(speed[:, hand])]
     y = np.where((t >= fast - 0.2) & (t <= fast + 0.15), w[:, hand, 1], np.nan)
     top = int(np.nanargmin(y))
@@ -96,14 +109,23 @@ def reading(s):
     camera = {(1, 1): "front", (-1, -1): "back", (-1, 1): "left", (1, -1): "right"}.get((chest(-0.6, -0.3), chest(0.15, 0.4)))
     if hand == 0:  # a left-hander is a right-hander in a mirror
         camera = {"left": "right", "right": "left"}.get(camera, camera)
-    return {"hit": float(t[top]), "speed": float(np.nanmax(speed)), "hand": hand, "camera": camera,
-            "overhead": bool(np.nanmax(speed) >= 15 and (k[top, NOSE, 1] - w[top, hand, 1]) / unit > 0.3)}
+    peak = float(np.nanmax(speed[:, hand]))
+    return {"hit": float(t[top]), "speed": peak, "hand": hand, "camera": camera,
+            "overhead": bool(peak >= 15 and (k[top, NOSE, 1] - w[top, hand, 1]) / unit > 0.3)}
+
+def racket_hand(swings):
+    """The hand most of one video's swings are read with. A single swing can be misread: the other hand is raised
+    high too, and from behind the pose swaps the two sides."""
+    hands = [r["hand"] for s in swings if (r := reading(s)) and r["overhead"]]
+    return max(set(hands), key=hands.count) if hands else None
 
 def refine():
     with db.connect() as c:
         last, new = {}, []
-        for s in db.swings(c):
-            l, r = s["label"], reading(s)
+        every = db.swings(c)
+        hands = {v: racket_hand([s for s in every if s["video_id"] == v]) for v in {s["video_id"] for s in every}}
+        for s in every:
+            l, r = s["label"], reading(s, hands[s["video_id"]])
             d = {}
             if r and ("hit" in l or r["overhead"]):
                 d = {"hit": round(r["hit"], 3), "camera": r["camera"]}

@@ -12,7 +12,8 @@ const NONE = '__none__'
 type ChoiceProps<K extends string> = {
   value: K | undefined
   options: Record<K, string>
-  none: string
+  /** Name of "nothing chosen". Left out, something is always chosen. */
+  none?: string
   onChange: (value: K | undefined) => void
   id?: string
   'aria-label'?: string
@@ -34,7 +35,7 @@ export function Choice<K extends string>({
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={NONE}>{none}</SelectItem>
+        {none && <SelectItem value={NONE}>{none}</SelectItem>}
         {Object.entries<string>(options).map(([key, name]) => (
           <SelectItem key={key} value={key}>
             {name}

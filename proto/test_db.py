@@ -23,17 +23,26 @@ k[:, 0, 1], k[:, [5, 6], 1], k[:, [11, 12], 1], k[:, [15, 16], 1] = 0.3, 0.4, 0.
 k[:, 5, 0], k[:, 6, 0] = np.where(t < 1.1, 0.4, 0.6), np.where(t < 1.1, 0.6, 0.4)  # back to the camera, then chest
 k[:, 10, 1] = 0.5 - 0.4 * np.exp(-((t - 1.1) / 0.08) ** 2)
 compare.player = lambda s, a, b: (t[(t >= a) & (t <= b)], k[(t >= a) & (t <= b)], None)
-r = compare.reading({"label": {"hit": 1.0}})
+cand = {"label": {}, "t0": 0.5, "t1": 2}
+r = compare.reading(cand)
 assert abs(r["hit"] - 1.1) < 0.02 and r["hand"] == 1 and r["overhead"] and r["camera"] == "left", r
-assert abs(compare.reading({"label": {}, "t0": 0.5, "t1": 2})["hit"] - 1.1) < 0.02  # found without a label too
+# reading again from its own answer gives the same answer: a wrong hit must not pull the next reading after it
+assert compare.reading({**cand, "label": {"hit": 0.6, "source": "pose"}})["hit"] == r["hit"]
+assert abs(compare.reading({"label": {"hit": 1.0, "source": "human"}})["hit"] - 1.1) < 0.02  # a person's hit narrows the search
+clean_k = k.copy()
+k[60, 10, :2] = 0.05, 0.0  # the pose jumps for one frame, far faster and higher than the swing
+assert abs(compare.reading(cand)["hit"] - 1.1) < 0.02
+k[:, 9, 1] = 0.6 - 0.6 * np.exp(-((t - 0.7) / 0.08) ** 2)  # the other hand flicks up faster: told the hand, the hit stays
+assert compare.reading(cand)["hand"] == 0 and abs(compare.reading(cand, 1)["hit"] - 1.1) < 0.02
+k = clean_k
 flat = k.copy()
 flat[:, 10, 1] = 0.5
 k, coach = flat, k
-assert compare.reading({"label": {"hit": 1.0}}) is None  # a still hand is not a hit
+assert compare.reading(cand) is None  # a still hand is not a hit
 
 # the coach lifts the racket-side foot, I do not: that is the finding, and the coach's words on it come along
 k = coach.copy()
-me = {"label": {"hit": 1.1}, "fps": 30, "video_id": "u"}
+me = {"label": {"hit": 1.1}, "t0": 0.5, "t1": 2, "fps": 30, "video_id": "u"}
 lifted = coach.copy()
 lifted[:, 16, 1] = 0.9 - 0.15 * np.exp(-((t - 1.3) / 0.1) ** 2)
 compare.player = lambda s, a, b: (t[(t >= a) & (t <= b)], (lifted if s.get("coach") else k)[(t >= a) & (t <= b)], None)
@@ -44,6 +53,12 @@ c.execute("INSERT INTO video VALUES('v','coach','教练','',30,10,0)")
 c.executemany("INSERT INTO segment VALUES(?, 'v', ?, ?, ?, ?, NULL)",
               [("a", 0, 5, "talk", "右腿会抬起来"), ("b", 5, 9, "slow_demo", "右腿离开地"), ("x", 9, 12, "ad", "右腿"), ("y", 20, 25, "talk", "别的")])
 found = diagnose.diagnose(c, me, {**me, "coach": True}, [me])
-assert [(f["key"], f["short"], f["habit"]) for f in found][0] == ("leg", True, [1, 1]) and not any(f["short"] for f in found[1:]), found
+assert [f["phase"] for f in found] == ["引拍", "击球", "击球", "击球", "击球后"]  # the whole swing, in order
+assert [f["key"] for f in found if f["short"]] == ["leg"], found
+leg = found[-1]
+assert leg["video"] == {"short": 1, "total": 1, "value": leg["me"], "habit": True} and leg["coach"] > leg["me"]
+# both players are shown at the same moments, the joint to watch marked in each
+assert [f["at"] for f in leg["frames"]] == [0.1, 0.25, 0.4] and all(len(f["me"]) == len(f["coach"]) == 2 for f in leg["frames"])
+found = [leg]
 assert [(l["t0"], l["t1"], l["text"]) for l in found[0]["lessons"]] == [(0, 9, "右腿会抬起来右腿离开地")]  # neighbours read as one
 print("ok")

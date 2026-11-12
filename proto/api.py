@@ -94,7 +94,9 @@ def diagnosis(me: str, coach: str):
         lib = {s["id"]: s for s in db.swings(c)}
         if not all(i in lib and compare.ready(lib[i]) for i in (me, coach)):
             raise HTTPException(404, "这两拍不能对比")
-        return {"checks": diagnose.diagnose(c, lib[me], lib[coach], [s for s in lib.values() if compare.ready(s)])}
+        ready = [s for s in lib.values() if compare.ready(s)]
+        return {"video": {"name": lib[me]["name"], "swings": sum(s["video_id"] == lib[me]["video_id"] for s in ready)},
+                "checks": diagnose.diagnose(c, lib[me], lib[coach], ready)}
 
 DIST = Path(__file__).resolve().parent.parent / "web/dist"
 
