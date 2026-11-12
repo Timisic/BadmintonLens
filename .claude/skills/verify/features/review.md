@@ -20,7 +20,7 @@ node .claude/skills/verify/shoot.mjs swing-fix /review/<swingId> --do '
 ```
 Proof: `/api/library` shows the new `hit` and `camera` with `source: "human"`. Then 回到自动识别 brings the pose values back, 删除 returns to the grid and the label reads `usable: false`, and 恢复 under `/review?deleted=true` makes it `true` again.
 
-On the grid, reach one card with `page.locator('li:has(a[href*="<swingId>"])').getByRole("button", { name: "删除" })`.
+On the grid, reach one card with `page.locator('li:has(a[href*="<swingId>"])').getByRole("button", { name: "删除" })`. The toast (`[data-sonner-toast]`, `已删除撤销` or `已恢复撤销`) shows within 300 ms; the card leaves and `已删除 N` changes only after the refetch, so wait about 1.5 s before reading them.
 
 Stepping must be exact: 12 presses of `ArrowRight` give 12 new frame times and 12 of `ArrowLeft` return to the first. Read the time from `span.min-w-16` under the picture.
 

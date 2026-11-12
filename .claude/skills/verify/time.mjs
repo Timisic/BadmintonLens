@@ -8,7 +8,9 @@ const { chromium } = createRequire(path.join(root, 'web/'))('playwright')
 const [route, n = 3] = process.argv.slice(2)
 const browser = await chromium.launch({ channel: 'chrome' })
 for (let i = 0; i < n; i++) {
-  const page = await (await browser.newContext()).newPage({ viewport: { width: 1440, height: 900 } })
+  // a fresh context per run, closed after it: no cache carried over, and no video stream left open to hang close()
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+  const page = await context.newPage()
   await page.goto(`http://localhost:5273${route}`, { waitUntil: 'commit' })
   const ms = await page.evaluate(() => new Promise((done) => {
     const check = () => {
@@ -19,5 +21,6 @@ for (let i = 0; i < n; i++) {
     check()
   }))
   console.log(ms, 'ms', await page.locator('video').count(), 'videos')
+  await context.close()
 }
 await browser.close()
