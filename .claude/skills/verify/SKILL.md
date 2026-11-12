@@ -23,7 +23,7 @@ It copies `proto/store` to `.verify/store`, starts the API on `127.0.0.1:8765` a
 .claude/skills/verify/run.sh doctor
 ```
 
-Prints `OK <url> videos N swings N human labels N`, or says which process is down. Run it first when anything looks off. `human labels` should be 0 on a fresh copy.
+Prints `OK <url> videos N swings N human labels N`, or says which process is down. Run it first when anything looks off. A fresh copy has as many `human labels` as `proto/store` itself (the person's own edits); each save in a journey adds one.
 
 ## Drive
 
